@@ -28,7 +28,7 @@
 #### 2. AI Web Design Visual Knowledge Base
 Analyzes popular web design patterns, outputs template JSON. Studio can replicate any design. 5 min requirements, 30 sec generation, 3 min debugging, 0 bugs.
 
-![AI Web Vision](docs/image/Aiweb.png)
+![AI Web Vision](docs/image/AIweb.png)
 
 #### 3. Raft Consensus Algorithm Visualization
 1 min requirements, 30 sec generation, first attempt, 0 bugs.

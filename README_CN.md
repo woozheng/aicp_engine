@@ -29,7 +29,7 @@
 #### 2. AI 网站素材视觉知识库
 分析流行网页视觉特征，输出模板 JSON，Studio 可仿照生成。需求 5 分钟，AI 生成 30 秒，调试 3 分钟，Bug：0
 
-![AI Web Vision](docs/image/Aiweb.png)
+![AI Web Vision](docs/image/AIweb.png)
 
 #### 3. Raft 分布式算法可视化
 需求 1 分钟，生成 30 秒，一次过，Bug：0
