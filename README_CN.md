@@ -50,7 +50,7 @@
 ### Windows（桌面版，含 GUI）
 
 ```bash
-git clone https://github.com/woozheng/aicp-engine.git
+git clone https://github.com/woozheng/aicp_engine.git
 cd aicp-engine
 pip install -r requirements.txt
 copy aicp.yaml.example aicp.yaml  # 填入你的 API Key
@@ -65,7 +65,7 @@ python -m runtime
 
 ### Docker（服务器 / macOS / Linux）
 
-From [Releases](https://github.com/woozheng/aicp-engine/releases) download `aicp-server.tar`,then
+From [Releases](https://github.com/woozheng/aicp_engine/releases) download `aicp-server.tar`,then
 
 
 ```bash

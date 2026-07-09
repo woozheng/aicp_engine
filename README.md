@@ -49,7 +49,7 @@ Analyzes popular web design patterns, outputs template JSON. Studio can replicat
 ### Windows (Desktop Edition with GUI)
 
 ```bash
-git clone https://github.com/woozheng/aicp-engine.git
+git clone https://github.com/woozheng/aicp_engine.git
 cd aicp-engine
 pip install -r requirements.txt
 copy aicp.yaml.example(En) aicp.yaml  # Add your API Key
@@ -66,7 +66,7 @@ Built-in desktop apps:
 - **Studio**: Windows desktop + web edition for AI-powered development.
 
 ### Docker (Server / macOS / Linux)
-从 [Releases](https://github.com/woozheng/aicp-engine/releases) 下载 `aicp-server.tar`,然后
+从 [Releases](https://github.com/woozheng/aicp_engine/releases) 下载 `aicp-server.tar`,然后
 
 ```bash
 docker load -i aicp-server.tar
