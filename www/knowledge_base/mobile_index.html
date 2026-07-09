@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📚 知识库</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,sans-serif;background:#f5f5f5;padding:12px;min-height:100vh}
+        .container{max-width:600px;margin:0 auto}
+        
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .header h1{font-size:22px;font-weight:700;color:#1e293b}
+        .header .upload-btn{background:#6366f1;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:14px;font-weight:600;cursor:pointer}
+        .header .upload-btn:active{background:#5558e6}
+        
+        .search-box{display:flex;gap:8px;margin-bottom:12px}
+        .search-box input{flex:1;padding:12px 16px;border:1px solid #e5e7eb;border-radius:10px;font-size:16px;background:#fff;outline:none}
+        .search-box input:focus{border-color:#6366f1}
+        .search-box button{padding:12px 20px;border:none;border-radius:10px;background:#6366f1;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+        .search-box button:active{background:#5558e6}
+        .search-box button.secondary{background:#10b981}
+        .search-box button.secondary:active{background:#059669}
+        
+        .collect-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+        .collect-bar button{flex:1;padding:10px 8px;border:none;border-radius:8px;background:#fff;font-size:13px;font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:pointer;border:1px solid #e5e7eb;min-width:60px}
+        .collect-bar button:active{background:#f0f0f0}
+        .collect-bar button .icon{font-size:18px;display:block;margin-bottom:2px}
+        
+        .result-item{background:#fff;padding:14px;border-radius:10px;margin-bottom:8px;border-left:4px solid #6366f1;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+        .result-item h3{font-size:15px;font-weight:600;color:#1e293b;margin-bottom:4px}
+        .result-item .meta{font-size:11px;color:#94a3b8;margin-bottom:4px}
+        .result-item .content{font-size:13px;color:#475569;line-height:1.5;max-height:60px;overflow:hidden;word-break:break-all}
+        .result-item .actions{display:flex;gap:6px;margin-top:8px}
+        .result-item .actions button{padding:4px 12px;border:none;border-radius:4px;font-size:12px;cursor:pointer}
+        .result-item .actions .view{background:#eef2ff;color:#6366f1}
+        .result-item .actions .delete{background:#fee2e2;color:#ef4444}
+        
+        .image-preview{background:#fff;padding:12px;border-radius:10px;margin-top:8px;border-left:4px solid #10b981;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+        .image-preview .name{font-size:13px;font-weight:600;color:#1e293b}
+        .image-preview .meta{font-size:11px;color:#94a3b8;margin:2px 0 4px}
+        .image-preview img{max-width:100%;max-height:300px;border-radius:8px;margin-top:4px;display:block}
+        
+        .empty{text-align:center;padding:40px 20px;color:#94a3b8}
+        .empty .icon{font-size:48px;margin-bottom:12px}
+        .loading{text-align:center;padding:20px;color:#94a3b8}
+        
+        .footer{text-align:center;padding:16px 0;font-size:11px;color:#cbd5e1}
+        #fileInput{display:none}
+        
+        .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:12px 24px;border-radius:10px;font-size:14px;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none;max-width:90%}
+        .toast.show{opacity:1}
+        
+        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;opacity:0;pointer-events:none;transition:opacity 0.3s}
+        .modal-overlay.show{opacity:1;pointer-events:auto}
+        .modal-overlay .modal{background:#fff;border-radius:12px;max-width:500px;width:100%;max-height:80vh;padding:24px;overflow-y:auto;transform:scale(0.95);transition:transform 0.3s}
+        .modal-overlay.show .modal{transform:scale(1)}
+        .modal-overlay .modal h2{font-size:18px;margin-bottom:12px}
+        .modal-overlay .modal .body{font-size:14px;line-height:1.7;color:#1e293b;white-space:pre-wrap;word-break:break-all}
+        .modal-overlay .modal .footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding:0}
+        .modal-overlay .modal .footer button{padding:8px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer}
+        .modal-overlay .modal .footer .close{background:#e5e7eb;color:#1e293b}
+        .modal-overlay .modal .footer .save{background:#6366f1;color:#fff}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📚 知识库</h1>
+        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">＋ 上传</button>
+        <input type="file" id="fileInput" multiple accept="*/*" onchange="handleFileUpload(event)">
+    </div>
+
+    <div class="search-box">
+        <input id="queryInput" placeholder="搜索知识库..." onkeydown="if(event.key==='Enter')doSearch()">
+        <button onclick="doSearch()">🔍</button>
+        <button class="secondary" onclick="resetSearch()">↺</button>
+    </div>
+
+    <!-- 采集入口 -->
+    <div class="collect-bar">
+        <button onclick="collectPhoto()"><span class="icon">📷</span>拍照</button>
+        <button onclick="pickImage()"><span class="icon">🖼️</span>相册</button>
+        <button onclick="collectLocation()"><span class="icon">📍</span>位置</button>
+        <button onclick="testStorage()"><span class="icon">💾</span>存储</button>
+        <button onclick="testNotify()"><span class="icon">🔔</span>通知</button>
+        <button onclick="makeCall()"><span class="icon">📞</span>电话</button>
+    </div>
+
+    <div id="results">
+        <div class="empty"><div class="icon">🔍</div>输入关键词搜索</div>
+    </div>
+
+    <div class="footer">数据存在你的服务器 · 完全私有</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- 查看弹窗 -->
+<div class="modal-overlay" id="modal">
+    <div class="modal">
+        <h2 id="modalTitle">标题</h2>
+        <div class="body" id="modalBody">内容</div>
+        <div class="footer">
+            <button class="close" onclick="closeModal()">关闭</button>
+            <button class="save" onclick="saveModal()">💾 保存到知识库</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = '/api/builtins/knowledge_base/main';
+let modalData = null;
+
+// ===== Toast =====
+let toastTimer;
+function showToast(msg, duration) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), duration || 2500);
+}
+
+// ===== 弹窗 =====
+function openModal(title, body, data) {
+    document.getElementById('modalTitle').textContent = title || '查看';
+    document.getElementById('modalBody').textContent = body || '无内容';
+    modalData = data || null;
+    document.getElementById('modal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.remove('show');
+    modalData = null;
+}
+
+function saveModal() {
+    if (!modalData) { showToast('❌ 无数据可保存', 1500); return; }
+    const { content, source, type, title } = modalData;
+    saveToKnowledgeBase(content, source || 'modal', type || 'text', title || '采集内容');
+    closeModal();
+}
+
+// ==================== 采集功能 ====================
+
+// ===== 1. 拍照 =====
+async function collectPhoto() {
+    if (!window.mobile) { showToast('⚠️ 请用 AICP 壳打开', 2000); return; }
+    try {
+        showToast('📷 打开相机...', 2000);
+        const response = await window.mobile.camera.take();
+        const data = response.result;
+        if (data.ok) {
+            openModal(
+                '📷 照片',
+                `路径: ${data.path}\n名称: ${data.name}\n大小: ${(data.size/1024).toFixed(1)} KB`,
+                { content: `照片: ${data.name}`, source: 'mobile_camera', type: 'image', title: data.name }
+            );
+        } else {
+            showToast('❌ ' + data.error, 2000);
+        }
+    } catch(e) {
+        const msg = e.message || JSON.stringify(e);
+        showToast('❌ ' + msg, 2000);
+    }
+}
+
+// ===== 2. 相册选择 =====
+async function pickImage() {
+    if (!window.mobile) { showToast('⚠️ 请用 AICP 壳打开', 2000); return; }
+    try {
+        showToast('🖼️ 打开相册...', 2000);
+        const response = await window.mobile.camera.pick();
+        const data = response.result;
+        
+        if (data.ok) {
+            showToast('✅ 已选择: ' + data.name, 2000);
+            
+            const img = document.createElement('img');
+            img.src = data.path;
+            img.loading = 'lazy';
+            
+            const container = document.createElement('div');
+            container.className = 'image-preview';
+            container.innerHTML = `
+                <div class="name">🖼️ ${data.name}</div>
+                <div class="meta">大小: ${(data.size/1024).toFixed(1)} KB</div>
+            `;
+            container.appendChild(img);
+            
+            document.getElementById('results').prepend(container);
+        } else {
+            showToast('❌ ' + data.error, 2000);
+        }
+    } catch(e) {
+        const msg = e.message || JSON.stringify(e);
+        showToast('❌ ' + msg, 2000);
+    }
+}
+
+// ===== 3. GPS 定位 =====
+async function collectLocation() {
+    if (!window.mobile) { showToast('⚠️ 请用 AICP 壳打开', 2000); return; }
+    try {
+        showToast('📍 获取位置...', 2000);
+        const response = await window.mobile.gps.getCurrent();
+        const data = response.result;
+        if (data.ok) {
+            const content = `📍 位置信息\n纬度: ${data.latitude}\n经度: ${data.longitude}\n海拔: ${data.altitude || '未知'}m`;
+            openModal(
+                '📍 位置',
+                content,
+                { 
+                    content: JSON.stringify({ lat: data.latitude, lng: data.longitude, alt: data.altitude }), 
+                    source: 'mobile_gps', 
+                    type: 'location', 
+                    title: `位置 ${new Date().toLocaleTimeString()}` 
+                }
+            );
+        } else {
+            showToast('❌ ' + data.error, 2000);
+        }
+    } catch(e) {
+        const msg = e.message || JSON.stringify(e);
+        showToast('❌ ' + msg, 2000);
+    }
+}
+
+// ===== 4. 存储测试 =====
+async function testStorage() {
+    if (!window.mobile) { showToast('⚠️ 请用 AICP 壳打开', 2000); return; }
+    try {
+        showToast('💾 写入数据...', 1500);
+        await window.mobile.storage.set('test_key', 'Hello from AICP!');
+        const response = await window.mobile.storage.get('test_key');
+        const data = response.result;
+        if (data.ok) {
+            showToast('✅ 读取成功: ' + data.value, 2500);
+        } else {
+            showToast('❌ ' + data.error, 2000);
+        }
+    } catch(e) {
+        showToast('❌ ' + e.message, 2000);
+    }
+}
+
+// ===== 5. 通知测试 =====
+async function testNotify() {
+    if (!window.mobile) { showToast('⚠️ 请用 AICP 壳打开', 2000); return; }
+    try {
+        showToast('🔔 发送通知...', 1500);
+        await window.mobile.notify.send('AICP 通知', '这是一条来自知识库的通知');
+        showToast('✅ 通知已发送', 1500);
+    } catch(e) {
+        showToast('❌ ' + e.message, 2000);
+    }
+}
+
+// ===== 6. 打电话 =====
+async function makeCall() {
+    if (!window.mobile) { showToast('⚠️ 请用 AICP 壳打开', 2000); return; }
+    
+    const number = prompt('请输入电话号码：', '10086');
+    if (number === null) return;
+    if (number.trim() === '') { showToast('❌ 号码不能为空', 1500); return; }
+    
+    try {
+        showToast('📞 拨打电话: ' + number, 2000);
+        const response = await window.mobile.phone.call(number.trim());
+        const data = response.result;
+        if (data.ok) {
+            showToast('✅ 已拨号: ' + data.number, 1500);
+        } else {
+            showToast('❌ ' + data.error, 2000);
+        }
+    } catch(e) {
+        const msg = e.message || JSON.stringify(e);
+        showToast('❌ ' + msg, 2000);
+    }
+}
+
+// ==================== 知识库 API ====================
+
+async function saveToKnowledgeBase(content, source, type, title) {
+    if (!content) { showToast('❌ 内容为空', 1500); return; }
+    try {
+        showToast('💾 保存中...', 2000);
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'auto_save',
+                params: {
+                    content: content,
+                    source: source || 'unknown',
+                    type: type || 'text',
+                    title: title || '未命名',
+                    metadata: { collected_at: new Date().toISOString() }
+                }
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('✅ 已保存到知识库', 1500);
+            doSearch();
+        } else {
+            showToast('❌ 保存失败: ' + (data.reason || data.error || '未知错误'), 2000);
+        }
+    } catch(e) {
+        showToast('❌ ' + e.message, 2000);
+    }
+}
+
+// ===== 搜索 =====
+async function doSearch() {
+    const query = document.getElementById('queryInput').value.trim();
+    if (!query) { resetSearch(); return; }
+    document.getElementById('results').innerHTML = '<div class="loading">⏳ 搜索中...</div>';
+    try {
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'search', params: {query}})
+        });
+        const data = await res.json();
+        if (!data.ok) { document.getElementById('results').innerHTML = `<div class="empty">❌ ${data.error}</div>`; return; }
+        if (!data.results || data.results.length === 0) {
+            document.getElementById('results').innerHTML = `<div class="empty"><div class="icon">📭</div>没有找到相关内容</div>`;
+            return;
+        }
+        document.getElementById('results').innerHTML = data.results.map(r => renderResult(r)).join('');
+    } catch(e) {
+        document.getElementById('results').innerHTML = `<div class="empty">❌ ${e.message}</div>`;
+    }
+}
+
+function resetSearch() {
+    document.getElementById('queryInput').value = '';
+    document.getElementById('results').innerHTML = `<div class="empty"><div class="icon">🔍</div>输入关键词搜索</div>`;
+}
+
+function renderResult(r) {
+    const content = r.content_preview || r.content || '';
+    const preview = content.substring(0, 150);
+    return `
+        <div class="result-item" data-id="${r.id}">
+            <h3>${escapeHtml(r.title || '未命名')}</h3>
+            <div class="meta">${r.type || 'text'} · ${r.source || '未知'} ${r.created_at ? '· ' + new Date(r.created_at).toLocaleDateString() : ''}</div>
+            <div class="content">${escapeHtml(preview)}${preview.length >= 150 ? '...' : ''}</div>
+            <div class="actions">
+                <button class="view" onclick="viewEntry('${r.id}')">📖 查看</button>
+                <button class="delete" onclick="deleteEntry('${r.id}')">🗑️ 删除</button>
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ===== 查看条目 =====
+async function viewEntry(id) {
+    try {
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'get', params: {entry_id: id}})
+        });
+        const data = await res.json();
+        if (data.ok && data.entry) {
+            openModal(
+                data.entry.title || '未命名',
+                data.entry.content || '',
+                null
+            );
+        } else {
+            showToast('❌ 未找到', 1500);
+        }
+    } catch(e) {
+        showToast('❌ ' + e.message, 1500);
+    }
+}
+
+// ===== 删除条目 =====
+async function deleteEntry(id) {
+    if (!confirm('确定删除吗？')) return;
+    try {
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'delete', params: {entry_id: id}})
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('✅ 已删除', 1500);
+            const item = document.querySelector(`.result-item[data-id="${id}"]`);
+            if (item) item.remove();
+        } else {
+            showToast('❌ ' + (data.error || '删除失败'), 1500);
+        }
+    } catch(e) {
+        showToast('❌ ' + e.message, 1500);
+    }
+}
+
+// ===== 上传文件 =====
+async function handleFileUpload(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    for (const file of files) {
+        await uploadFile(file);
+    }
+    event.target.value = '';
+    doSearch();
+}
+
+async function uploadFile(file) {
+    showToast(`📤 上传: ${file.name}`, 2000);
+    try {
+        const reader = new FileReader();
+        const content = await new Promise((resolve) => {
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsText(file);
+        });
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'auto_save',
+                params: {
+                    content: content,
+                    source: 'mobile_upload',
+                    type: 'file',
+                    title: file.name,
+                    metadata: {file_name: file.name, file_size: file.size}
+                }
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast(`✅ 已上传: ${file.name}`, 1500);
+        } else {
+            showToast(`❌ 上传失败: ${data.reason || '未知错误'}`, 2000);
+        }
+    } catch(e) {
+        showToast(`❌ 上传失败: ${e.message}`, 2000);
+    }
+}
+
+// ===== 检查壳环境 =====
+(function checkEnv() {
+    if (window.mobile) {
+        console.log('✅ 运行在 AICP 壳中');
+        console.log('  📷 camera:', !!window.mobile.camera);
+        console.log('  📍 gps:', !!window.mobile.gps);
+        console.log('  💾 storage:', !!window.mobile.storage);
+        console.log('  🔔 notify:', !!window.mobile.notify);
+        console.log('  📞 phone:', !!window.mobile.phone);
+        showToast('✅ AICP 壳已连接', 1500);
+    } else {
+        console.log('⚠️ 未检测到 AICP 壳，部分功能不可用');
+        let retry = 0;
+        const checkInterval = setInterval(() => {
+            retry++;
+            if (window.mobile) {
+                clearInterval(checkInterval);
+                console.log('✅ 壳已注入');
+                showToast('✅ AICP 壳已连接', 1500);
+            } else if (retry > 10) {
+                clearInterval(checkInterval);
+                console.log('⚠️ 未检测到 AICP 壳');
+            }
+        }, 500);
+    }
+})();
+
+// ===== 点击弹窗外关闭 =====
+document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

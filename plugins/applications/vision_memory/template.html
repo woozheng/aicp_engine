@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{NAME}}</title>
+    <style>
+        :root {
+            --primary: {{PRIMARY}};
+            --secondary: {{SECONDARY}};
+            --background: {{BACKGROUND}};
+            --text-heading: {{TEXT_HEADING}};
+            --text-body: {{TEXT_BODY}};
+            --border: {{BORDER}};
+            --radius: {{RADIUS_MEDIUM}};
+            --radius-lg: {{RADIUS_LARGE}};
+            --radius-pill: {{RADIUS_PILL}};
+            --gap: {{COMPONENT_GAP}};
+            --section-padding: {{SECTION_PADDING}};
+            --max-width: {{MAX_WIDTH}};
+            --heading-font: {{HEADING_FONT}};
+            --body-font: {{BODY_FONT}};
+            --heading-size: {{HEADING_SIZE}};
+            --heading-weight: {{HEADING_WEIGHT}};
+            --heading-line: {{HEADING_LINE}};
+            --body-size: {{BODY_SIZE}};
+            --body-weight: {{BODY_WEIGHT}};
+            --body-line: {{BODY_LINE}};
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: var(--body-font);
+            background: var(--background);
+            color: var(--text-body);
+            font-size: var(--body-size);
+            font-weight: var(--body-weight);
+            line-height: var(--body-line);
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--primary); text-decoration: none; }
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: var(--section-padding);
+        }
+        h1, h2, h3, h4 {
+            font-family: var(--heading-font);
+            color: var(--text-heading);
+            font-weight: var(--heading-weight);
+            line-height: var(--heading-line);
+        }
+        h1 { font-size: var(--heading-size); }
+        h2 { font-size: calc(var(--heading-size) * 0.75); }
+        h3 { font-size: calc(var(--heading-size) * 0.6); }
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 40px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-heading);
+        }
+        .logo span { color: var(--primary); }
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+        .nav-link {
+            color: var(--text-body);
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .nav-link:hover { color: var(--primary); }
+        .btn-primary {
+            display: inline-block;
+            padding: 12px 32px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-pill);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+        }
+        .btn-secondary {
+            display: inline-block;
+            padding: 12px 32px;
+            background: transparent;
+            color: var(--text-heading);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-pill);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover { background: var(--border); }
+        .hero {
+            padding: 60px 0 40px 0;
+            text-align: center;
+        }
+        .hero-title {
+            font-size: calc(var(--heading-size) * 1.2);
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+        .hero-desc {
+            font-size: 20px;
+            color: var(--text-body);
+            max-width: 600px;
+            margin: 0 auto 32px auto;
+            line-height: 1.6;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--gap);
+            margin-top: 32px;
+        }
+        .card {
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        }
+        .card-icon { font-size: 32px; margin-bottom: 12px; }
+        .card-title { font-size: 18px; margin-bottom: 8px; }
+        .card-desc { color: var(--text-body); font-size: 14px; line-height: 1.6; }
+        .app-layout {
+            display: flex;
+            gap: 0;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar {
+            width: 240px;
+            padding: 24px 16px;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .sidebar-item {
+            padding: 10px 12px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: background 0.2s;
+            list-style: none;
+            font-weight: 500;
+        }
+        .sidebar-item:hover { background: var(--border); }
+        .sidebar-item.active {
+            background: var(--primary);
+            color: #fff;
+        }
+        .main-content {
+            flex: 1;
+            padding: 24px 32px;
+        }
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 0;
+            margin-top: 60px;
+            text-align: center;
+            color: var(--text-body);
+            font-size: 14px;
+        }
+        @media (max-width: 768px) {
+            :root {
+                --section-padding: 40px 20px;
+                --heading-size: 32px;
+            }
+            .navbar {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            .nav-links {
+                gap: 16px;
+                flex-wrap: wrap;
+            }
+            .app-layout {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .hero-title {
+                font-size: 32px;
+            }
+            .hero-desc {
+                font-size: 16px;
+            }
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 1024px) and (min-width: 769px) {
+            :root {
+                --section-padding: 60px 40px;
+            }
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <div class="logo">🛠 <span>Studio</span></div>
+            <div class="nav-links">
+                {{NAV_LINKS}}
+            </div>
+        </nav>
+        <div class="app-layout">
+            {{SIDEBAR}}
+            <main class="main-content">
+                {{HERO}}
+                {{CARDS}}
+            </main>
+        </div>
+        <footer class="footer">
+            © 2026 {{NAME}} · 由 AICP Studio 生成
+        </footer>
+    </div>
+</body>
+</html>

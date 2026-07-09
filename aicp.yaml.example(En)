@@ -1,0 +1,58 @@
+host: 0.0.0.0
+
+port: 9000        # HTTP server port. WebSocket auto-assigned to port+1. Large file upload to port+2.
+static_dir: www   # Static HTML directory
+data_dir: data    # Data storage directory
+
+# WebSocket external URL for cloud deployments. Optional for local development.
+websocket:
+  external_url: ws://127.0.0.1:9001/ws
+
+# Enable authentication for cloud deployments. Set to false for local/personal use.
+enable_auth: false    # When true, web access requires a valid token. Must be false for local desktop apps.
+tokens:
+- testtoken          # Configure strong tokens for production deployments.
+
+studio_token: "testtoken"  # Studio web-based development authentication token
+
+remote_aicp:         ###### Local aicp_cli accesses cloud aicp_engine via this endpoint. Used when local CLI has network restrictions. Cloud CLI node auto-executes tasks and returns results.
+  endpoint: http://127.0.0.1:9000/api/builtins/aicpEnvelop
+  token: testtoken
+  
+models:
+  roles:
+    default: doubao-seed-2.0-code              # Must configure default. Coding and reasoning roles are optional and fall back to default.
+    coding: doubao-seed-2.0-code
+    reasoning: doubao-seed-2.0-code
+  max_retries: 3                     # Maximum LLM retry attempts
+  request_timeout: 90
+  stream_timeout: 300
+  max_concurrent: 5                 # Maximum concurrent iterations for aicp_cli execution. Default 5.
+  providers:
+    openai:                                       # Single model mode: one node, one model
+      base_url: https://api.openai.com/v1
+      api_key: ${OPENAI_API_KEY}                  # Supports environment variables or plaintext API key
+      models:
+      - id: gpt-4
+        max_tokens: 8192
+        temperature: 0.7
+    aggregator:                                   # Aggregator mode: one node provides multiple model routes
+      base_url: https://gpt-agent.cc/v1
+      api_key: ${AGGREGATOR_API_KEY}              # Supports environment variables or plaintext API key
+      models:
+      - id: claude-sonnet-4-6
+        max_tokens: 8192
+        temperature: 0.3
+      - id: doubao-seed-2.0-code
+        max_tokens: 8192
+        temperature: 0.1
+      - id: deepseek-v4-flash
+        max_tokens: 4096
+        temperature: 0.3
+      - id: deepseek-v4-pro
+        max_tokens: 8192
+        temperature: 0.8
+    newbula:                           # Built-in web model engine. Must open Newbula engine to use. For local development only. Do not set as default. Auto-prioritized when Newbula is running.
+      models: []
+      base_url: http://127.0.0.1:9000/api/newbula_plus/engin
+      api_key: none

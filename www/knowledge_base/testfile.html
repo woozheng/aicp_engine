@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🔧 AICP 全插件测试面板</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,sans-serif;background:#f5f5f5;padding:12px;min-height:100vh}
+        .container{max-width:600px;margin:0 auto}
+        h1{font-size:22px;margin-bottom:4px;color:#1e293b}
+        .subtitle{font-size:12px;color:#94a3b8;margin-bottom:16px}
+
+        .card{background:#fff;padding:16px;border-radius:10px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+        .card h3{font-size:14px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+        .card h3 .badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
+        .badge.mobile{background:#dbeafe;color:#2563eb}
+        .badge.desktop{background:#fef3c7;color:#d97706}
+        .badge.all{background:#dcfce7;color:#16a34a}
+
+        .btn{background:#6366f1;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;margin:2px;white-space:nowrap}
+        .btn:active{background:#5558e6}
+        .btn.green{background:#10b981}.btn.green:active{background:#059669}
+        .btn.red{background:#ef4444}.btn.red:active{background:#dc2626}
+        .btn.orange{background:#f59e0b}.btn.orange:active{background:#d97706}
+        .btn.purple{background:#8b5cf6}.btn.purple:active{background:#7c3aed}
+        .btn.gray{background:#94a3b8}.btn.gray:active{background:#64748b}
+
+        input,textarea{width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:6px;font-size:14px;margin-top:6px}
+        textarea{height:60px;resize:vertical}
+        .flex{display:flex;gap:6px;flex-wrap:wrap}
+        .output{background:#f8fafc;padding:10px;border-radius:6px;font-size:12px;color:#1e293b;margin-top:8px;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace}
+        .output.success{border-left:3px solid #10b981}
+        .output.error{border-left:3px solid #ef4444}
+        .output.pending{border-left:3px solid #f59e0b}
+
+        .status-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+        .status-item{flex:1;min-width:70px;background:#fff;padding:8px;border-radius:8px;text-align:center;font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+        .status-item .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+        .dot.on{background:#10b981}.dot.off{background:#ef4444}.dot.unknown{background:#94a3b8}
+
+        .run-all{width:100%;padding:14px;font-size:16px;font-weight:700;margin-bottom:12px;border-radius:10px}
+        .summary{background:#fff;padding:12px;border-radius:10px;margin-top:8px;font-size:13px;text-align:center}
+        .summary .count{font-size:24px;font-weight:700}
+        .summary .count.pass{color:#10b981}.summary .count.fail{color:#ef4444}
+
+        .section-divider{border-top:1px solid #e5e7eb;margin:10px 0;padding-top:8px}
+        .hint{font-size:11px;color:#94a3b8;margin-top:4px}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔧 AICP 全插件测试面板</h1>
+    <div class="subtitle">移动端 + 桌面端 · 12 个插件全覆盖</div>
+
+    <!-- ===== 状态栏 ===== -->
+    <div class="status-bar" id="statusBar"></div>
+
+    <!-- ===== 一键测试 ===== -->
+    <button class="btn run-all green" onclick="runAllTests()">🚀 一键测试全部插件</button>
+    <div class="summary" id="summary" style="display:none"></div>
+
+    <!-- ===== 📷 相机 ===== -->
+    <div class="card">
+        <h3>📷 相机 <span class="badge mobile">移动端</span></h3>
+        <div class="flex">
+            <button class="btn" onclick="test('camera','take')">📸 拍照</button>
+            <button class="btn green" onclick="test('camera','pick')">🖼️ 相册</button>
+        </div>
+        <div class="output" id="cameraOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📍 GPS ===== -->
+    <div class="card">
+        <h3>📍 GPS 定位 <span class="badge mobile">移动端</span></h3>
+        <div class="flex">
+            <button class="btn" onclick="test('gps','getCurrent')">📍 获取位置</button>
+            <button class="btn green" onclick="test('gps','startTracking')">🟢 追踪</button>
+            <button class="btn red" onclick="test('gps','stopTracking')">🔴 停止</button>
+        </div>
+        <div class="output" id="gpsOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 🔔 通知 ===== -->
+    <div class="card">
+        <h3>🔔 通知 <span class="badge mobile">移动端</span></h3>
+        <button class="btn" onclick="test('notify','send')">🔔 发送通知</button>
+        <div class="output" id="notifyOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📳 震动 ===== -->
+    <div class="card">
+        <h3>📳 震动 <span class="badge mobile">移动端</span></h3>
+        <button class="btn" onclick="test('vibrate','vibrate')">📳 震动 200ms</button>
+        <div class="output" id="vibrateOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📞 电话 ===== -->
+    <div class="card">
+        <h3>📞 电话 <span class="badge mobile">移动端</span></h3>
+        <div class="flex">
+            <input id="phoneNumber" placeholder="输入号码" value="10086" style="flex:1;margin-top:0;">
+            <button class="btn" onclick="test('phone','call')">📞 拨号</button>
+        </div>
+        <div class="output" id="phoneOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 💾 存储 ===== -->
+    <div class="card">
+        <h3>💾 本地存储 <span class="badge all">通用</span></h3>
+        <div class="flex">
+            <button class="btn" onclick="test('storage','set')">💾 写入</button>
+            <button class="btn green" onclick="test('storage','get')">📖 读取</button>
+            <button class="btn orange" onclick="test('storage','remove')">🗑️ 删除</button>
+            <button class="btn red" onclick="test('storage','clear')">💣 清空</button>
+        </div>
+        <div class="output" id="storageOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📋 剪贴板 ===== -->
+    <div class="card">
+        <h3>📋 剪贴板 <span class="badge all">通用</span></h3>
+        <div class="flex">
+            <button class="btn" onclick="test('clipboard','copy')">📋 复制</button>
+            <button class="btn green" onclick="test('clipboard','paste')">📌 粘贴</button>
+        </div>
+        <div class="output" id="clipboardOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📤 分享 ===== -->
+    <div class="card">
+        <h3>📤 分享 <span class="badge mobile">移动端</span></h3>
+        <button class="btn" onclick="test('share','text')">📤 分享文本</button>
+        <div class="output" id="shareOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 🔋 电量 ===== -->
+    <div class="card">
+        <h3>🔋 电量 <span class="badge mobile">移动端</span></h3>
+        <button class="btn" onclick="test('battery','getStatus')">🔋 获取电量</button>
+        <div class="output" id="batteryOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📶 网络 ===== -->
+    <div class="card">
+        <h3>📶 网络 <span class="badge all">通用</span></h3>
+        <button class="btn" onclick="test('network','getStatus')">📶 获取状态</button>
+        <div class="output" id="networkOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 📁 文件系统 ===== -->
+    <div class="card">
+        <h3>📁 文件系统 <span class="badge all">通用</span></h3>
+        <input id="fsPath" placeholder="文件/目录路径" value="C:/test_aicp.txt">
+        <div class="flex" style="margin-top:6px;">
+            <button class="btn green" onclick="test('fs','list')">📋 列出</button>
+            <button class="btn" onclick="test('fs','read')">📖 读取</button>
+            <button class="btn green" onclick="test('fs','write')">💾 写入</button>
+            <button class="btn orange" onclick="test('fs','search')">🔍 搜索</button>
+            <button class="btn red" onclick="test('fs','delete')">🗑️ 删除</button>
+            <button class="btn" onclick="test('fs','info')">ℹ️ 信息</button>
+            <button class="btn green" onclick="test('fs','exists')">❓ 存在?</button>
+            <button class="btn orange" onclick="test('fs','mkdir')">📁 建目录</button>
+        </div>
+        <textarea id="fsContent" placeholder="写入内容..." style="margin-top:6px;">Hello from AICP!</textarea>
+        <div class="output" id="fsOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 💻 进程控制 ===== -->
+    <div class="card">
+        <h3>💻 进程控制 <span class="badge desktop">桌面端</span></h3>
+        <input id="shellCmd" placeholder="输入命令，如 dir">
+        <div class="flex" style="margin-top:6px;">
+            <button class="btn purple" onclick="test('process','shell')">💻 执行</button>
+            <button class="btn purple" onclick="test('process','spawn')">🚀 后台</button>
+            <button class="btn purple" onclick="test('process','run')">▶ 运行</button>
+        </div>
+        <div class="section-divider">
+            <div class="flex">
+                <input id="openTarget" placeholder="文件/网址/应用" value="notepad.exe" style="flex:1;">
+                <button class="btn green" onclick="test('process','open')">🚀 打开</button>
+            </div>
+        </div>
+        <div class="section-divider">
+            <div class="flex">
+                <input id="killTarget" placeholder="进程名/PID" value="notepad.exe" style="flex:1;">
+                <button class="btn red" onclick="test('process','kill')">🗑️ 终止</button>
+            </div>
+        </div>
+        <div class="output" id="processOutput">等待测试...</div>
+    </div>
+
+    <!-- ===== 🚀 打开系统应用 ===== -->
+    <div class="card" style="border-left:4px solid #06b6d4;">
+        <h3>🚀 打开系统应用 <span class="badge all">通用</span></h3>
+        
+        <div class="section-divider">
+            <label style="font-size:13px;color:#64748b;">📱 移动端</label>
+            <div class="flex" style="margin-top:4px;">
+                <button class="btn" onclick="quickOpenApp('settings')">⚙️ 设置</button>
+                <button class="btn green" onclick="quickOpenApp('contacts')">👥 通讯录</button>
+                <button class="btn orange" onclick="quickOpenApp('calendar')">📅 日历</button>
+                <button class="btn purple" onclick="quickOpenApp('camera')">📷 相机</button>
+                <button class="btn" onclick="quickOpenApp('gallery')">🖼️ 相册</button>
+                <button class="btn green" onclick="quickOpenApp('clock')">⏰ 时钟</button>
+                <button class="btn orange" onclick="quickOpenApp('calculator')">🔢 计算器</button>
+                <button class="btn purple" onclick="quickOpenApp('messages')">💬 短信</button>
+                <button class="btn" onclick="quickOpenApp('browser')">🌐 浏览器</button>
+                <button class="btn green" onclick="quickOpenApp('maps')">🗺️ 地图</button>
+                <button class="btn orange" onclick="quickOpenApp('music')">🎵 音乐</button>
+                <button class="btn purple" onclick="quickOpenApp('files')">📁 文件</button>
+            </div>
+        </div>
+
+        <div class="section-divider">
+            <label style="font-size:13px;color:#64748b;">💻 桌面端 (Windows)</label>
+            <div class="flex" style="margin-top:4px;">
+                <button class="btn" onclick="quickOpenApp('notepad')">📝 记事本</button>
+                <button class="btn green" onclick="quickOpenApp('calc')">🔢 计算器</button>
+                <button class="btn orange" onclick="quickOpenApp('explorer')">📁 资源管理器</button>
+                <button class="btn purple" onclick="quickOpenApp('cmd')">💻 命令行</button>
+                <button class="btn" onclick="quickOpenApp('control')">⚙️ 控制面板</button>
+                <button class="btn green" onclick="quickOpenApp('taskmgr')">📊 任务管理器</button>
+                <button class="btn orange" onclick="quickOpenApp('paint')">🎨 画图</button>
+                <button class="btn purple" onclick="quickOpenApp('wordpad')">📄 写字板</button>
+            </div>
+        </div>
+
+        <div class="section-divider">
+            <label style="font-size:13px;color:#64748b;">🔗 自定义打开</label>
+            <div class="flex" style="margin-top:4px;">
+                <input id="customOpenTarget" placeholder="包名 / 应用名 / URL Scheme" value="com.android.settings" style="flex:1;">
+                <button class="btn purple" onclick="openCustom()">🚀 打开</button>
+            </div>
+        </div>
+
+        <div class="output" id="openAppOutput">点击打开</div>
+    </div>
+</div>
+
+<script>
+// ===== 插件状态 =====
+const plugins = {
+    camera:    { mobile: true,  desktop: false },
+    gps:       { mobile: true,  desktop: false },
+    notify:    { mobile: true,  desktop: false },
+    vibrate:   { mobile: true,  desktop: false },
+    phone:     { mobile: true,  desktop: false },
+    share:     { mobile: true,  desktop: false },
+    battery:   { mobile: true,  desktop: false },
+    storage:   { mobile: true,  desktop: true  },
+    clipboard: { mobile: true,  desktop: true  },
+    network:   { mobile: true,  desktop: true  },
+    fileSystem:{ mobile: true,  desktop: true  },
+    process:   { mobile: false, desktop: true  },
+};
+
+let isMobile = false;
+
+function init() {
+    isMobile = !!(window.mobile && window.mobile.camera);
+    renderStatusBar();
+}
+
+function renderStatusBar() {
+    const bar = document.getElementById('statusBar');
+    let html = '';
+    for (const [key, p] of Object.entries(plugins)) {
+        const has = window.mobile && window.mobile[key];
+        const dot = has ? 'on' : 'unknown';
+        html += `<div class="status-item"><span class="dot ${dot}"></span>${key}</div>`;
+    }
+    bar.innerHTML = html;
+}
+
+function toast(msg) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:999;max-width:90%;';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
+}
+
+function unpack(r) { return r?.result || r; }
+
+function setOutput(id, ok, text) {
+    const el = document.getElementById(id);
+    el.textContent = (ok ? '✅ ' : '❌ ') + (text || '');
+    el.className = 'output ' + (ok ? 'success' : 'error');
+}
+
+function setPending(id) {
+    const el = document.getElementById(id);
+    el.textContent = '⏳ 测试中...';
+    el.className = 'output pending';
+}
+
+// ===== 统一测试入口 =====
+async function test(plugin, action) {
+    const outputId = plugin + 'Output';
+    setPending(outputId);
+
+    try {
+        let r;
+        switch(plugin) {
+            case 'camera':
+                r = unpack(await window.mobile.camera[action]());
+                setOutput(outputId, r?.ok, r?.ok ? `${action==='take'?'拍照':'选择'}: ${r.name} (${(r.size/1024).toFixed(1)}KB)` : r?.error);
+                break;
+
+            case 'gps':
+                if (action === 'getCurrent') {
+                    r = unpack(await window.mobile.gps.getCurrent());
+                    setOutput(outputId, r?.ok, r?.ok ? `📍 ${r.latitude},${r.longitude} alt:${r.altitude||'?'}m` : r?.error);
+                } else if (action === 'startTracking') {
+                    await window.mobile.gps.startTracking();
+                    setOutput(outputId, true, '已开始追踪');
+                } else {
+                    await window.mobile.gps.stopTracking();
+                    setOutput(outputId, true, '已停止追踪');
+                }
+                break;
+
+            case 'notify':
+                await window.mobile.notify.send('AICP 测试', '这是一条测试通知');
+                setOutput(outputId, true, '通知已发送');
+                break;
+
+            case 'vibrate':
+                await window.mobile.vibrate.vibrate(200);
+                setOutput(outputId, true, '震动完成');
+                break;
+
+            case 'phone':
+                const number = document.getElementById('phoneNumber').value.trim();
+                if (!number) { setOutput(outputId, false, '请输入号码'); return; }
+                r = unpack(await window.mobile.phone.call(number));
+                setOutput(outputId, r?.ok, r?.ok ? `已拨号: ${r.number||number}` : r?.error);
+                break;
+
+            case 'storage':
+                const sk = 'aicp_test_key';
+                if (action === 'set') {
+                    await window.mobile.storage.set(sk, 'Hello AICP! ' + Date.now());
+                    setOutput(outputId, true, `写入: ${sk}`);
+                } else if (action === 'get') {
+                    r = unpack(await window.mobile.storage.get(sk));
+                    setOutput(outputId, r?.ok, r?.ok ? `读取: ${r.value}` : (r?.error||'未找到'));
+                } else if (action === 'remove') {
+                    await window.mobile.storage.remove(sk);
+                    setOutput(outputId, true, `已删除: ${sk}`);
+                } else {
+                    await window.mobile.storage.clear();
+                    setOutput(outputId, true, '已清空');
+                }
+                break;
+
+            case 'clipboard':
+                if (action === 'copy') {
+                    const txt = 'AICP Test ' + Date.now();
+                    await window.mobile.clipboard.copy(txt);
+                    setOutput(outputId, true, `已复制: ${txt}`);
+                } else {
+                    r = unpack(await window.mobile.clipboard.paste());
+                    setOutput(outputId, r?.ok, r?.ok ? `粘贴: ${r.text}` : (r?.error||'空'));
+                }
+                break;
+
+            case 'share':
+                await window.mobile.share.text('来自 AICP 的分享测试');
+                setOutput(outputId, true, '分享已触发');
+                break;
+
+            case 'battery':
+                r = unpack(await window.mobile.battery.getStatus());
+                setOutput(outputId, r?.ok, r?.ok ? `🔋 ${r.level}% ${r.is_charging?'⚡充电中':'🔌'}` : r?.error);
+                break;
+
+            case 'network':
+                r = unpack(await window.mobile.network.getStatus());
+                setOutput(outputId, r?.ok, r?.ok ? `${r.connected?'✅ 已连接':'❌ 未连接'} ${r.type||''}` : r?.error);
+                break;
+
+            case 'fs':
+                const path = document.getElementById('fsPath').value.trim();
+                if (!path && action !== 'search') { setOutput(outputId, false, '请输入路径'); return; }
+                switch(action) {
+                    case 'list':
+                        r = unpack(await window.mobile.fileSystem.list(path, false));
+                        if (r?.ok) {
+                            const files = r.files || [];
+                            setOutput(outputId, true, `📋 ${files.length} 个\n` + files.slice(0,20).map(f => (f.isDirectory?'📁':'📄')+' '+f.name).join('\n'));
+                        } else setOutput(outputId, false, r?.error);
+                        break;
+                    case 'read':
+                        r = unpack(await window.mobile.fileSystem.read(path));
+                        setOutput(outputId, r?.ok, r?.ok ? `📄 ${r.path} (${(r.size/1024).toFixed(1)}KB)\n${(r.content||'').substring(0,500)}` : r?.error);
+                        break;
+                    case 'write':
+                        const content = document.getElementById('fsContent').value;
+                        r = unpack(await window.mobile.fileSystem.write(path, content, false));
+                        setOutput(outputId, r?.ok, r?.ok ? `✅ 写入: ${path}` : r?.error);
+                        break;
+                    case 'search':
+                        const pattern = prompt('搜索模式', '.txt');
+                        if (!pattern) return;
+                        r = unpack(await window.mobile.fileSystem.search(path||'.', pattern, true, false));
+                        if (r?.ok) {
+                            const found = r.files || [];
+                            setOutput(outputId, true, `🔍 ${found.length} 个\n` + found.slice(0,20).join('\n'));
+                        } else setOutput(outputId, false, r?.error);
+                        break;
+                    case 'delete':
+                        if (!confirm(`删除 ${path}?`)) return;
+                        r = unpack(await window.mobile.fileSystem.delete(path, false));
+                        setOutput(outputId, r?.ok, r?.ok ? `✅ 已删除: ${path}` : r?.error);
+                        break;
+                    case 'info':
+                        r = unpack(await window.mobile.fileSystem.info(path));
+                        setOutput(outputId, r?.ok, r?.ok ? `📄 ${r.name}\n${(r.size/1024).toFixed(1)}KB\n${r.modified}\n目录:${r.isDirectory?'是':'否'}` : r?.error);
+                        break;
+                    case 'exists':
+                        r = unpack(await window.mobile.fileSystem.exists(path));
+                        setOutput(outputId, r?.ok, r?.exists ? '✅ 存在' : '❌ 不存在');
+                        break;
+                    case 'mkdir':
+                        r = unpack(await window.mobile.fileSystem.mkdir(path, true));
+                        setOutput(outputId, r?.ok, r?.ok ? `✅ 已创建: ${path}` : r?.error);
+                        break;
+                }
+                break;
+
+            case 'process':
+                switch(action) {
+                    case 'shell':
+                        const cmd = document.getElementById('shellCmd').value.trim();
+                        if (!cmd) { setOutput(outputId, false, '请输入命令'); return; }
+                        r = unpack(await window.mobile.process.shell(cmd));
+                        setOutput(outputId, r?.ok||r?.exit_code===0, r?.stdout||r?.stderr||JSON.stringify(r));
+                        break;
+                    case 'spawn':
+                        const sc = document.getElementById('shellCmd').value.trim();
+                        if (!sc) { setOutput(outputId, false, '请输入命令'); return; }
+                        const parts = sc.split(' ');
+                        r = unpack(await window.mobile.process.spawn(parts[0], parts.slice(1)));
+                        setOutput(outputId, r?.ok, r?.ok ? `🚀 PID: ${r.pid}` : r?.error);
+                        break;
+                    case 'run':
+                        const rc = document.getElementById('shellCmd').value.trim();
+                        if (!rc) { setOutput(outputId, false, '请输入命令'); return; }
+                        const rparts = rc.split(' ');
+                        r = unpack(await window.mobile.process.run(rparts[0], rparts.slice(1)));
+                        setOutput(outputId, r?.ok||r?.exit_code===0, r?.stdout||r?.stderr||JSON.stringify(r));
+                        break;
+                    case 'open':
+                        const target = document.getElementById('openTarget').value.trim();
+                        if (!target) { setOutput(outputId, false, '请输入目标'); return; }
+                        r = unpack(await window.mobile.process.open(target));
+                        setOutput(outputId, r?.ok, r?.ok ? `✅ 已打开: ${target}` : r?.error);
+                        break;
+                    case 'kill':
+                        const kt = document.getElementById('killTarget').value.trim();
+                        if (!kt) { setOutput(outputId, false, '请输入目标'); return; }
+                        r = unpack(await window.mobile.process.kill(/^\d+$/.test(kt) ? parseInt(kt) : kt));
+                        setOutput(outputId, r?.ok, r?.ok ? `✅ 已终止: ${kt}` : r?.error);
+                        break;
+                }
+                break;
+        }
+    } catch(e) {
+        setOutput(outputId, false, e.message);
+    }
+}
+
+// ===== 🚀 打开系统应用 =====
+const systemApps = {
+    mobile: {
+        'settings': 'android.settings.SETTINGS',
+        'contacts': 'content://contacts/people',
+        'calendar': 'content://com.android.calendar',
+        'camera': 'android.media.action.IMAGE_CAPTURE',
+        'gallery': 'android.intent.action.VIEW',
+        'clock': 'android.intent.action.SHOW_ALARMS',
+        'calculator': 'android.intent.action.MAIN',
+        'messages': 'sms:',
+        'browser': 'https://google.com',
+        'maps': 'geo:0,0?q=',
+        'music': 'android.intent.action.MUSIC_PLAYER',
+        'files': 'android.intent.action.VIEW',
+    },
+    desktop: {
+        'notepad': 'notepad.exe',
+        'calc': 'calc.exe',
+        'explorer': 'explorer.exe',
+        'cmd': 'cmd.exe',
+        'control': 'control.exe',
+        'taskmgr': 'taskmgr.exe',
+        'paint': 'mspaint.exe',
+        'wordpad': 'write.exe',
+    },
+};
+
+async function quickOpenApp(app) {
+    if (!window.mobile || !window.mobile.process) {
+        toast('⚠️ 进程插件未加载');
+        return;
+    }
+
+    const isM = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    const apps = isM ? systemApps.mobile : systemApps.desktop;
+    const target = apps[app];
+
+    if (!target) { toast('❌ 未知: ' + app); return; }
+
+    const output = document.getElementById('openAppOutput');
+    output.textContent = '⏳ 打开中...';
+    output.className = 'output pending';
+
+    try {
+        const r = unpack(await window.mobile.process.open(target));
+        if (r?.ok) {
+            output.textContent = '✅ 已打开: ' + app;
+            output.className = 'output success';
+            toast('✅ ' + app);
+        } else {
+            output.textContent = '❌ ' + (r?.error || JSON.stringify(r));
+            output.className = 'output error';
+        }
+    } catch(e) {
+        output.textContent = '❌ ' + e.message;
+        output.className = 'output error';
+    }
+}
+
+async function openCustom() {
+    const target = document.getElementById('customOpenTarget').value.trim();
+    if (!target) { toast('请输入目标'); return; }
+
+    const output = document.getElementById('openAppOutput');
+    output.textContent = '⏳ 打开中...';
+    output.className = 'output pending';
+
+    try {
+        const r = unpack(await window.mobile.process.open(target));
+        if (r?.ok) {
+            output.textContent = '✅ 已打开: ' + target;
+            output.className = 'output success';
+        } else {
+            output.textContent = '❌ ' + (r?.error || JSON.stringify(r));
+            output.className = 'output error';
+        }
+    } catch(e) {
+        output.textContent = '❌ ' + e.message;
+        output.className = 'output error';
+    }
+}
+
+// ===== 🚀 一键测试全部 =====
+async function runAllTests() {
+    const summary = document.getElementById('summary');
+    summary.style.display = 'block';
+    summary.innerHTML = '<span class="count" style="color:#f59e0b;">⏳</span> 测试中...';
+    
+    let pass = 0, fail = 0;
+    const results = [];
+
+    const tests = [
+        { name: '💾 存储', fn: async () => {
+            await window.mobile.storage.set('_t', 'ok');
+            const r = unpack(await window.mobile.storage.get('_t'));
+            return r?.ok ? [true, r.value] : [false, r?.error];
+        }},
+        { name: '📋 剪贴板', fn: async () => {
+            await window.mobile.clipboard.copy('test');
+            const r = unpack(await window.mobile.clipboard.paste());
+            return r?.ok ? [true, r.text] : [false, r?.error];
+        }},
+        { name: '📶 网络', fn: async () => {
+            const r = unpack(await window.mobile.network.getStatus());
+            return r?.ok ? [true, r.type||'connected'] : [false, r?.error];
+        }},
+        { name: '📁 文件', fn: async () => {
+            const r = unpack(await window.mobile.fileSystem.write('/tmp/_t', 'ok', false));
+            return r?.ok ? [true, 'ok'] : [false, r?.error];
+        }},
+    ];
+
+    if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        tests.push(
+            { name: '📷 拍照', fn: async () => {
+                const r = unpack(await window.mobile.camera.take());
+                return r?.ok ? [true, r.name] : [false, r?.error];
+            }},
+            { name: '📍 GPS', fn: async () => {
+                const r = unpack(await window.mobile.gps.getCurrent());
+                return r?.ok ? [true, `${r.latitude},${r.longitude}`] : [false, r?.error];
+            }},
+            { name: '📳 震动', fn: async () => {
+                await window.mobile.vibrate.vibrate(100);
+                return [true, 'ok'];
+            }},
+        );
+    } else {
+        tests.push(
+            { name: '💻 Shell', fn: async () => {
+                const r = unpack(await window.mobile.process.shell('echo ok'));
+                return (r?.ok||r?.exit_code===0) ? [true, r?.stdout?.trim()] : [false, r?.stderr];
+            }},
+        );
+    }
+
+    for (const test of tests) {
+        try {
+            const [ok, detail] = await test.fn();
+            if (ok) { pass++; results.push({ name: test.name, status: 'pass', detail }); }
+            else { fail++; results.push({ name: test.name, status: 'fail', detail }); }
+        } catch(e) {
+            fail++;
+            results.push({ name: test.name, status: 'fail', detail: e.message });
+        }
+    }
+
+    let html = `<span class="count pass">${pass}</span> 通过 · <span class="count fail">${fail}</span> 失败`;
+    html += '<div style="text-align:left;margin-top:8px;font-size:12px;">';
+    for (const r of results) {
+        html += `<div>${r.status==='pass'?'✅':'❌'} ${r.name}${r.detail?': '+r.detail:''}</div>`;
+    }
+    html += '</div>';
+    summary.innerHTML = html;
+}
+
+// ===== 回车触发 =====
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        const t = e.target;
+        if (t.id === 'fsPath' || t.id === 'fsContent') test('fs','read');
+        else if (t.id === 'shellCmd') test('process','shell');
+        else if (t.id === 'openTarget') test('process','open');
+        else if (t.id === 'killTarget') test('process','kill');
+        else if (t.id === 'phoneNumber') test('phone','call');
+        else if (t.id === 'customOpenTarget') openCustom();
+    }
+});
+
+init();
+setInterval(init, 3000);
+</script>
+</body>
+</html>

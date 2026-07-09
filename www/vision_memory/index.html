@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视觉知识库</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #fff; padding: 24px; margin: 0; color: #1e293b; }
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+        .header h1 { font-size: 24px; font-weight: 600; margin: 0; }
+        .header .sub { color: #64748b; font-size: 14px; margin: 0; }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            padding: 4px;
+        }
+        .tabs button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .tabs button.active {
+            background: #fff;
+            color: #1e293b;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .tabs button:hover:not(.active) { color: #1e293b; }
+
+        .panel { display: none; margin-top: 20px; }
+        .panel.active { display: block; }
+
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            background: #fafbfc;
+        }
+        .upload-area:hover { border-color: #94a3b8; }
+        .upload-area.dragover { border-color: #2563eb; background: #eff6ff; }
+        .upload-area .icon { font-size: 48px; margin-bottom: 12px; }
+        .upload-area p { margin: 4px 0; color: #64748b; }
+        .upload-area .btn {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 8px 20px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            color: #1e293b;
+        }
+        .upload-area .btn:hover { background: #f1f5f9; }
+        #fileInput { display: none; }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: none;
+        }
+        .status.success { display: block; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+        .status.error { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+        .status.info { display: block; background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
+
+        .search-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .search-bar input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        .search-bar input:focus { border-color: #2563eb; }
+        .search-bar button {
+            padding: 10px 24px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .search-bar button:hover { background: #1d4ed8; }
+        .search-bar button.secondary {
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+        .search-bar button.secondary:hover { background: #e2e8f0; }
+
+        .stats { font-size: 14px; color: #64748b; margin-bottom: 12px; }
+        .match-hint { font-size: 13px; color: #2563eb; padding: 8px 12px; background: #eff6ff; border-radius: 6px; margin-bottom: 16px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 14px;
+            background: #fff;
+            transition: border-color 0.2s, transform 0.1s;
+        }
+        .card:hover { border-color: #2563eb; transform: translateY(-2px); }
+        .card .thumb {
+            width: 100%;
+            aspect-ratio: 16/10;
+            background: #f1f5f9;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+        }
+        .card .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #ffffff;
+            display: block;
+        }
+        .card .thumb .placeholder {
+            font-size: 36px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        .card .name {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 10px 0 2px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+        .card .tags {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .card .color-bar {
+            display: flex;
+            gap: 4px;
+            margin: 6px 0 8px 0;
+        }
+        .card .color-bar span {
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+        .card .card-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .card .card-actions button {
+            flex: 1;
+            padding: 6px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        .card .card-actions button:hover { background: #f1f5f9; }
+        .card .card-actions button.copy-btn {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+        .card .card-actions button.copy-btn:hover { background: #1d4ed8; }
+        .card .card-actions button.copy-btn.copied {
+            background: #10b981;
+            border-color: #10b981;
+        }
+
+        .empty { text-align: center; padding: 60px 0; color: #94a3b8; grid-column: 1/-1; }
+        .empty .icon { font-size: 48px; }
+        .empty p { margin: 8px 0; }
+
+        .debug {
+            font-size: 12px;
+            color: #94a3b8;
+            background: #f8fafc;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 12px;
+            word-break: break-all;
+            font-family: monospace;
+            max-height: 80px;
+            overflow: auto;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 12px;
+            max-width: 720px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 32px;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #94a3b8;
+            background: none;
+            border: none;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #1e293b; }
+        .modal .modal-thumb {
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin: 8px 0 16px 0;
+            background: #ffffff;
+        }
+        .modal h2 { font-size: 20px; font-weight: 600; margin: 0 0 4px 0; }
+        .modal .sub { color: #64748b; font-size: 13px; margin: 0 0 16px 0; }
+        .modal .section {
+            margin-top: 16px;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 16px;
+        }
+        .modal .section h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 8px 0;
+        }
+        .modal .section .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            font-size: 14px;
+        }
+        .modal .section .row .label { color: #64748b; }
+        .modal .section .row .value { color: #1e293b; font-weight: 500; }
+        .modal .color-swatch {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+        .modal .tag-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .modal .tag-group .tag {
+            font-size: 12px;
+            padding: 2px 10px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            color: #475569;
+        }
+        .modal .json-preview {
+            background: #f8fafc;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 200px;
+            overflow: auto;
+            color: #1e293b;
+        }
+        .modal .no-data { color: #94a3b8; font-size: 13px; }
+        .modal .actions {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 16px;
+        }
+        .modal .actions button {
+            padding: 6px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .modal .actions button:hover { background: #f1f5f9; }
+        .modal .actions button.danger {
+            background: #fee2e2;
+            color: #991b1b;
+            border-color: #fca5a5;
+        }
+        .modal .actions button.danger:hover { background: #fecaca; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div>
+            <h1>📸 视觉知识库</h1>
+            <div class="sub">截图入库 · AI 解析 · 一键复制模板</div>
+        </div>
+        <div class="tabs">
+            <button id="btnBrowse" class="active">📂 浏览模板</button>
+            <button id="btnUpload">📥 上传截图</button>
+        </div>
+    </div>
+
+    <div class="panel active" id="panel-browse">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="搜索模板，如：Linear、Stripe、Airbnb...">
+            <button id="btnSearch">🔍 搜索</button>
+            <button id="btnReset" class="secondary">显示全部</button>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div id="matchHint"></div>
+        <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="panel" id="panel-upload">
+        <div class="upload-area" id="dropZone">
+            <div class="icon">🖼️</div>
+            <p><strong>拖拽截图到这里</strong></p>
+            <p>或点击下方按钮选择文件</p>
+            <button class="btn" id="btnUploadFile">选择文件</button>
+            <input type="file" id="fileInput" accept="image/*" multiple>
+            <p style="font-size:12px;color:#94a3b8;margin-top:12px;">支持 PNG / JPG / WebP</p>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="debug" id="debug"></div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="detailModal">
+    <div class="modal">
+        <button class="modal-close" id="modalClose">✕</button>
+        <img class="modal-thumb" id="detailThumb" src="" alt="截图">
+        <h2 id="detailName">模板名称</h2>
+        <div class="sub" id="detailId">ID: xxx</div>
+
+        <div class="section">
+            <h3>🎨 颜色风格</h3>
+            <div class="row" id="detailColors"><span class="no-data">未解析</span></div>
+        </div>
+        <div class="section">
+            <h3>📐 布局架构</h3>
+            <div class="row" id="detailLayout"><span class="no-data">未解析</span></div>
+        </div>
+        <div class="section">
+            <h3>🏷️ 标签</h3>
+            <div id="detailLabels"><span class="no-data">未解析</span></div>
+        </div>
+        <div class="section">
+            <h3>📝 风格描述</h3>
+            <div class="row" id="detailStyle"><span class="no-data">未解析</span></div>
+        </div>
+        <div class="section">
+            <h3>🧩 组件</h3>
+            <div id="detailComponents"><span class="no-data">未解析</span></div>
+        </div>
+        <div class="section">
+            <h3>🔤 字体</h3>
+            <div id="detailTypography"><span class="no-data">未解析</span></div>
+        </div>
+        <div class="section">
+            <h3>📄 完整数据 (JSON)</h3>
+            <div class="json-preview" id="detailJson">加载中...</div>
+        </div>
+
+        <div class="actions">
+            <button class="danger" id="btnDelete">🗑️ 删除</button>
+            <button id="btnCloseDetail">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 所有变量和函数挂到 window 上，确保全局可访问
+// ============================================================
+
+window.project = window.location.pathname.split('/')[1];
+window.API = '/api/applications/' + window.project;
+
+window.statusEl = document.getElementById('status');
+window.debugEl = document.getElementById('debug');
+window.gridEl = document.getElementById('grid');
+window.statsEl = document.getElementById('stats');
+window.hintEl = document.getElementById('matchHint');
+window.searchInput = document.getElementById('searchInput');
+
+window.currentPort = parseInt(window.location.port) || 9000;
+window.uploadPort = window.currentPort + 2;
+window.UPLOAD_URL = 'http://' + window.location.hostname + ':' + window.uploadPort + '/upload';
+
+window.currentTemplateId = null;
+window.allTemplates = [];
+
+// ===== Toast =====
+window.showToast = function(msg, duration) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(function() { el.classList.remove('show'); }, duration || 3000);
+};
+
+// ===== Tab切换 =====
+window.switchTab = function(tab) {
+    var btnBrowse = document.getElementById('btnBrowse');
+    var btnUpload = document.getElementById('btnUpload');
+    var panelBrowse = document.getElementById('panel-browse');
+    var panelUpload = document.getElementById('panel-upload');
+
+    if (tab === 'browse') {
+        btnBrowse.classList.add('active');
+        btnUpload.classList.remove('active');
+        panelBrowse.classList.add('active');
+        panelUpload.classList.remove('active');
+        window.resetSearch();
+    } else {
+        btnUpload.classList.add('active');
+        btnBrowse.classList.remove('active');
+        panelUpload.classList.add('active');
+        panelBrowse.classList.remove('active');
+    }
+};
+
+// ===== 工具 =====
+window.showStatus = function(msg, type) {
+    var el = window.statusEl;
+    el.textContent = msg;
+    el.className = 'status ' + type;
+    setTimeout(function() { el.className = 'status'; }, 6000);
+};
+
+window.debug = function(msg) {
+    var ts = new Date().toLocaleTimeString();
+    var el = window.debugEl;
+    el.textContent = '[' + ts + '] ' + msg;
+    console.log('[VisionMemory]', msg);
+};
+
+// ===== 复制模板 =====
+window.copyTemplate = function(templateId, templateName) {
+    fetch(window.API + '/generated?template_id=' + templateId)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (!data.content) {
+                window.showToast('❌ 获取模板失败', 3000);
+                return;
+            }
+            var html = data.content;
+            var content = '=== 设计模板: ' + templateName + ' ===\n\n以下是一个 HTML 模板，请参考它的颜色、布局、字体风格，应用到我的需求上。\n\n=== HTML ===\n' + html;
+
+            navigator.clipboard.writeText(content).then(function() {
+                var btn = document.querySelector('.copy-btn[data-id="' + templateId + '"]');
+                if (btn) {
+                    btn.textContent = '✅ 已复制';
+                    btn.classList.add('copied');
+                    setTimeout(function() {
+                        btn.textContent = '📋 复制模板';
+                        btn.classList.remove('copied');
+                    }, 3000);
+                }
+                window.showToast('✅ 已复制「' + templateName + '」模板到剪贴板', 3000);
+            }).catch(function(e) {
+                window.showToast('❌ 复制失败: ' + e.message, 3000);
+            });
+        })
+        .catch(function(e) {
+            window.showToast('❌ 获取模板失败: ' + e.message, 3000);
+        });
+};
+
+// ===== 详情弹窗 =====
+window.renderDetail = function(template) {
+    if (!template) return;
+    window.currentTemplateId = template.id;
+    document.getElementById('detailName').textContent = template.name || '未命名';
+    document.getElementById('detailId').textContent = 'ID: ' + (template.id || '');
+
+    var thumb = document.getElementById('detailThumb');
+    thumb.src = window.API + '/image?template_id=' + template.id;
+    thumb.onerror = function() { this.style.display = 'none'; };
+
+    var colors = template.summary?.colors || {};
+    var cEntries = [];
+    if (colors.primary) cEntries.push(['主色', colors.primary]);
+    if (colors.secondary) cEntries.push(['辅色', colors.secondary]);
+    if (colors.background) cEntries.push(['背景', colors.background]);
+    if (colors.text_heading) cEntries.push(['标题文字', colors.text_heading]);
+    if (colors.text_body) cEntries.push(['正文文字', colors.text_body]);
+
+    var colorsHtml = '';
+    if (cEntries.length) {
+        for (var ci = 0; ci < cEntries.length; ci++) {
+            colorsHtml += '<span><span class="label">' + cEntries[ci][0] + '：</span><span class="color-swatch" style="background:' + cEntries[ci][1] + '"></span><span class="value">' + cEntries[ci][1] + '</span></span>';
+        }
+    } else {
+        colorsHtml = '<span class="no-data">未解析</span>';
+    }
+    document.getElementById('detailColors').innerHTML = colorsHtml;
+
+    var layout = template.summary?.layout || {};
+    var lEntries = [];
+    if (layout.type) lEntries.push(['类型', layout.type]);
+    if (layout.header) lEntries.push(['顶部', layout.header]);
+    if (layout.main) lEntries.push(['主区', layout.main]);
+    if (layout.footer) lEntries.push(['底部', layout.footer]);
+
+    var layoutHtml = '';
+    if (lEntries.length) {
+        for (var li = 0; li < lEntries.length; li++) {
+            layoutHtml += '<span><span class="label">' + lEntries[li][0] + '：</span><span class="value">' + lEntries[li][1] + '</span></span>';
+        }
+    } else {
+        layoutHtml = '<span class="no-data">未解析</span>';
+    }
+    document.getElementById('detailLayout').innerHTML = layoutHtml;
+
+    var labels = template.labels || {};
+    var labelKeys = ['industry', 'style', 'layout', 'color', 'component', 'purpose', 'custom'];
+    var labelNames = { industry: '🏢 行业', style: '🎨 风格', layout: '📐 布局', color: '🎭 色彩', component: '🧩 组件', purpose: '🎯 用途', custom: '📌 自定义' };
+    var hasLabel = false;
+    var labelHtml = '';
+    for (var ki = 0; ki < labelKeys.length; ki++) {
+        var key = labelKeys[ki];
+        var vals = labels[key];
+        if (vals && Array.isArray(vals) && vals.length) {
+            hasLabel = true;
+            var tagHtml = '';
+            for (var vi = 0; vi < vals.length; vi++) {
+                tagHtml += '<span class="tag">' + vals[vi] + '</span>';
+            }
+            labelHtml += '<div style="margin:4px 0;"><span style="font-size:12px;color:#64748b;">' + (labelNames[key] || key) + '：</span><span class="tag-group">' + tagHtml + '</span></div>';
+        }
+    }
+    document.getElementById('detailLabels').innerHTML = hasLabel ? labelHtml : '<span class="no-data">未解析</span>';
+
+    document.getElementById('detailStyle').innerHTML = template.style_prompt ? '<span class="value">' + template.style_prompt + '</span>' : '<span class="no-data">未解析</span>';
+
+    var comps = template.summary?.components || [];
+    var compHtml = '';
+    if (comps.length) {
+        for (var ci2 = 0; ci2 < comps.length; ci2++) {
+            var c = comps[ci2];
+            compHtml += '<div style="margin:2px 0;font-size:13px;"><span style="font-weight:500;">' + c.type + '</span>' + (c.style ? ' ' + JSON.stringify(c.style) : '') + '</div>';
+        }
+    } else {
+        compHtml = '<span class="no-data">未解析</span>';
+    }
+    document.getElementById('detailComponents').innerHTML = compHtml;
+
+    var typo = template.summary?.typography || {};
+    var tEntries = [];
+    if (typo.heading && (typo.heading.font || typo.heading.size)) tEntries.push(['标题', typo.heading]);
+    if (typo.body && (typo.body.font || typo.body.size)) tEntries.push(['正文', typo.body]);
+
+    var typoHtml = '';
+    if (tEntries.length) {
+        for (var ti = 0; ti < tEntries.length; ti++) {
+            var v = tEntries[ti][1];
+            typoHtml += '<span><span class="label">' + tEntries[ti][0] + '：</span><span class="value">' + (v.font || '') + ' ' + (v.size || '') + ' ' + (v.weight || '') + '</span></span>';
+        }
+    } else {
+        typoHtml = '<span class="no-data">未解析</span>';
+    }
+    document.getElementById('detailTypography').innerHTML = typoHtml;
+
+    document.getElementById('detailJson').textContent = JSON.stringify(template, null, 2);
+    document.getElementById('detailModal').classList.add('active');
+};
+
+window.closeDetail = function() {
+    document.getElementById('detailModal').classList.remove('active');
+    window.currentTemplateId = null;
+};
+
+window.deleteTemplate = function() {
+    if (!window.currentTemplateId) return;
+    if (!confirm('确定要删除这个模板吗？')) return;
+    fetch(window.API + '/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: window.currentTemplateId })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (data.success) {
+            window.showStatus('✅ 已删除', 'success');
+            window.closeDetail();
+            window.resetSearch();
+        } else {
+            window.showStatus('❌ 删除失败: ' + (data.error || '未知错误'), 'error');
+        }
+    })
+    .catch(function(e) {
+        window.showStatus('❌ 删除异常: ' + e.message, 'error');
+    });
+};
+
+window.openDetail = function(templateId) {
+    fetch(window.API + '/get', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: templateId })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (data.template) window.renderDetail(data.template);
+        else window.showStatus('未找到模板', 'error');
+    })
+    .catch(function(e) {
+        window.showStatus('加载详情失败: ' + e.message, 'error');
+    });
+};
+
+// ===== 卡片渲染 =====
+window.renderCards = function(templates, query) {
+    var gridEl = window.gridEl;
+    var statsEl = window.statsEl;
+    var hintEl = window.hintEl;
+
+    if (!templates || templates.length === 0) {
+        gridEl.innerHTML = '<div class="empty"><div class="icon">📭</div><p>' + (query ? '没有匹配的模板' : '暂无模板，先去上传截图吧') + '</p>' + (query ? '<p style="font-size:13px;">试试其他关键词</p>' : '') + '</div>';
+        statsEl.textContent = '';
+        hintEl.textContent = '';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < templates.length; i++) {
+        var t = templates[i];
+        var colors = t.summary?.colors || {};
+        var colorVals = [];
+        if (colors.primary) colorVals.push(colors.primary);
+        if (colors.secondary) colorVals.push(colors.secondary);
+        if (colors.background) colorVals.push(colors.background);
+
+        var styleTags = t.labels?.style || [];
+        var layoutTags = t.labels?.layout || [];
+        var tags = '';
+        for (var si = 0; si < Math.min(styleTags.length, 2); si++) {
+            tags += (tags ? ' · ' : '') + styleTags[si];
+        }
+        for (var li2 = 0; li2 < Math.min(layoutTags.length, 2); li2++) {
+            tags += (tags ? ' · ' : '') + layoutTags[li2];
+        }
+
+        var colorBarHtml = '';
+        if (colorVals.length) {
+            for (var ci3 = 0; ci3 < colorVals.length; ci3++) {
+                colorBarHtml += '<span style="background:' + colorVals[ci3] + '"></span>';
+            }
+        }
+
+        html += '<div class="card">';
+        html += '<div class="thumb" onclick="window.openDetail(\'' + t.id + '\')">';
+        html += '<img src="' + window.API + '/image?template_id=' + t.id + '" onerror="this.style.display=\'none\';this.parentElement.querySelector(\'.placeholder\').style.display=\'flex\'" alt="' + t.name + '">';
+        html += '<span class="placeholder" style="display:none;">🖼️</span>';
+        html += '</div>';
+        html += '<div class="name" onclick="window.openDetail(\'' + t.id + '\')" title="' + t.name + '">' + t.name + '</div>';
+        html += '<div class="tags">' + tags + '</div>';
+        if (colorBarHtml) {
+            html += '<div class="color-bar">' + colorBarHtml + '</div>';
+        }
+        html += '<div class="card-actions">';
+        html += '<button class="copy-btn" data-id="' + t.id + '" onclick="window.copyTemplate(\'' + t.id + '\', \'' + t.name + '\')">📋 复制模板</button>';
+        html += '<button onclick="window.openDetail(\'' + t.id + '\')">📄 详情</button>';
+        html += '</div>';
+        html += '</div>';
+    }
+
+    gridEl.innerHTML = html;
+    statsEl.textContent = '共 ' + templates.length + ' 个模板';
+    hintEl.textContent = query ? '🔍 搜索结果：「' + query + '」' : '';
+};
+
+// ===== 搜索/列表 =====
+window.doSearch = function() {
+    var query = window.searchInput.value.trim();
+    if (!query) { window.resetSearch(); return; }
+    fetch(window.API + '/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'search', query: query, limit: 50 })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        window.renderCards(data.results || [], query);
+        if (data.hint) window.statsEl.textContent = window.statsEl.textContent + ' 💡 ' + data.hint;
+    })
+    .catch(function(e) {
+        window.gridEl.innerHTML = '<div class="empty"><p>加载失败</p></div>';
+    });
+};
+
+window.resetSearch = function() {
+    window.searchInput.value = '';
+    fetch(window.API + '/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list' })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        window.allTemplates = data.templates || [];
+        window.renderCards(window.allTemplates, null);
+    })
+    .catch(function(e) {
+        window.gridEl.innerHTML = '<div class="empty"><p>加载失败</p></div>';
+    });
+};
+
+// ===== 上传 =====
+window.uploadAndIngest = function(file) {
+    window.debug('处理: ' + file.name + ' (' + (file.size/1024).toFixed(1) + 'KB)');
+    var formData = new FormData();
+    formData.append('file', file);
+
+    return fetch(window.UPLOAD_URL, { method: 'POST', body: formData })
+        .then(function(res) {
+            if (!res.ok) {
+                window.showStatus('❌ 上传失败 (HTTP ' + res.status + ')', 'error');
+                return null;
+            }
+            return res.json();
+        })
+        .then(function(uploadData) {
+            if (!uploadData) return false;
+            var filePath = uploadData.file_path || uploadData.path || uploadData.filepath;
+            if (!filePath) {
+                window.showStatus('❌ 上传成功但未返回文件路径', 'error');
+                return false;
+            }
+            var name = file.name.replace(/\.[^.]+$/, '');
+            return fetch(window.API + '/ingest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'ingest_from_file', file_path: filePath, name: name })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(result) {
+                if (result.success) {
+                    window.showStatus('✅ ' + (result.name || name) + ' 已入库', 'success');
+                    window.debug('入库成功: ' + result.template_id);
+                    return true;
+                } else {
+                    window.showStatus('❌ 入库失败: ' + (result.error || '未知错误'), 'error');
+                    return false;
+                }
+            });
+        })
+        .catch(function(e) {
+            window.showStatus('❌ 请求失败: ' + e.message, 'error');
+            return false;
+        });
+};
+
+// ============================================================
+// DOM 加载完成后绑定事件
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+
+    // Tabs
+    document.getElementById('btnBrowse').addEventListener('click', function() { window.switchTab('browse'); });
+    document.getElementById('btnUpload').addEventListener('click', function() { window.switchTab('upload'); });
+
+    // Search
+    document.getElementById('btnSearch').addEventListener('click', window.doSearch);
+    document.getElementById('btnReset').addEventListener('click', window.resetSearch);
+    document.getElementById('searchInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') window.doSearch();
+    });
+
+    // Upload file
+    document.getElementById('btnUploadFile').addEventListener('click', function() {
+        document.getElementById('fileInput').click();
+    });
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        var files = e.target.files;
+        if (!files.length) return;
+        window.showStatus('⏳ 处理 ' + files.length + ' 张截图...', 'info');
+        var total = files.length;
+        var promises = [];
+        for (var fi = 0; fi < files.length; fi++) {
+            promises.push(window.uploadAndIngest(files[fi]));
+        }
+        Promise.all(promises).then(function(results) {
+            var okCount = 0;
+            for (var ri = 0; ri < results.length; ri++) {
+                if (results[ri]) okCount++;
+            }
+            window.showStatus('✅ ' + okCount + '/' + total + ' 成功', okCount === total ? 'success' : 'error');
+            document.getElementById('fileInput').value = '';
+            if (okCount > 0) {
+                window.switchTab('browse');
+                window.resetSearch();
+            }
+        });
+    });
+
+    // Drag and drop
+    var dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', function(e) {
+        this.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            document.getElementById('fileInput').files = e.dataTransfer.files;
+            document.getElementById('fileInput').dispatchEvent(new Event('change'));
+        }
+    });
+
+    // Modal
+    document.getElementById('modalClose').addEventListener('click', window.closeDetail);
+    document.getElementById('btnCloseDetail').addEventListener('click', window.closeDetail);
+    document.getElementById('detailModal').addEventListener('click', function(e) {
+        if (e.target === this) window.closeDetail();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') window.closeDetail();
+    });
+    document.getElementById('btnDelete').addEventListener('click', window.deleteTemplate);
+
+    // Start
+    window.resetSearch();
+    window.debug('✅ 已就绪，上传端口: ' + window.uploadPort);
+});
+</script>
+</body>
+</html>

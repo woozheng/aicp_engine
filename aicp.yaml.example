@@ -1,0 +1,62 @@
+
+host: 0.0.0.0
+
+port: 9000        # 系统自带http服务默认端口，ws端口默认+1，大文件上传接口默认+2
+static_dir: www   # 静态html目录
+data_dir: data    # 项目数据存储目录
+
+# 用于配置云端 Websocket 访问端口，用于云端域名，ip，映射，本地开发可不配置，或可按照以下默认值配置
+websocket:
+  external_url: ws://127.0.0.1:9001/ws
+
+# 云端部署使用 , 如果仅本地个人使用，设置为false即可
+enable_auth: false    #设置成true后网页访问必须持有token、本地使用和开发设置为 false，否则所有本地桌面应用均无法使用，仅www服务登录持有token可运行
+tokens:
+- testtoken          # 部署到云端请自行配置允许访问的token，自行增加token复杂度
+
+studio_token: "testtoken"  # 网页使用 Studio开发鉴权专用 
+
+remote_aicp:         ###### 本地 aicp_Cli 用于访问aicp_engine云端 aicp_Cli ，token为远端节点 token,此功能用于本地cli网络限制无法构建搜索，增加次配置和自动与云端网络无限制节点CLI沟通，由云顿cli节点自动执行任务返回数据 
+  endpoint: http://127.0.0.1:9000/api/builtins/aicpEnvelop
+  token: testtoken
+  
+models:
+  roles:
+    default: doubao-seed-2.0-code              #系统支持3种模型角色。必须配置defalut ，其他配置可不配置，默认降级 default
+    coding: doubao-seed-2.0-code
+    reasoning: doubao-seed-2.0-code
+  max_retries: 3                     #LLM 失败最大尝试次数
+  request_timeout: 90
+  stream_timeout: 300
+  max_concurrent: 5                 #aicp_cli 执行操作，最大尝试次数，默认5次
+  providers:
+    openai:                                       #传统单模型模式，一个节点一个模型 
+      base_url: https://api.openai.com/v1
+      api_key: ${OPENAI_API_KEY}                  #系统支持的api-key环境变量，可直接填入SK-api 明文
+      models:
+      - id: gpt-4
+        max_tokens: 8192
+        temperature: 0.7
+    aggregator:                                   #聚合模型模式，一个节点可提供多个模型路由 
+      base_url: https://gpt-agent.cc/v1
+      api_key: ${AGGREGATOR_API_KEY}              #系统支持的聚合Key环境变量，可直接填入SK-api 明文
+      models:
+      - id: claude-sonnet-4-6
+        max_tokens: 8192
+        temperature: 0.3
+      - id: doubao-seed-2.0-code
+        max_tokens: 8192
+        temperature: 0.1
+      - id: deepseek-v4-flash
+        max_tokens: 4096
+        temperature: 0.3
+      - id: deepseek-v4-pro
+        max_tokens: 8192
+        temperature: 0.8
+    newbula:                           #系统内置的网页model，使用时必须打开newbula引擎，仅限于本地开发使用，不要设置为default,启动newbula之后默认优先网页model
+      models: []
+      base_url: http://127.0.0.1:9000/api/newbula_plus/engin
+      api_key: none
+
+
+

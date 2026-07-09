@@ -1,0 +1,19 @@
+id: vision_memory
+name: 视觉知识库
+version: 1.2.0
+description: AI驱动的UI设计模板知识库，截图入库，智能检索，一键复制模板
+author: AICP
+category: 设计工具
+icon: 📸
+entry: _init.py
+plugins:
+  - _init.py
+  - ingest.py
+  - search.py
+  - get.py
+  - delete.py
+  - update.py
+  - image.py
+  - generated.py
+static:
+  - index.html

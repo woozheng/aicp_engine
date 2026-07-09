@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>📚 知识库</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,sans-serif;background:#f5f5f5;padding:20px;min-height:100vh}
+        .container{max-width:1200px;margin:0 auto}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+        .header h1{font-size:24px}
+        .header .tabs{display:flex;gap:4px}
+        .header .tabs button{padding:8px 20px;border:1px solid #ddd;background:#fff;cursor:pointer;border-radius:4px 4px 0 0;font-size:14px}
+        .header .tabs button.active{background:#6366f1;color:#fff;border-color:#6366f1}
+        .tab-content{display:none;background:#fff;border-radius:8px;padding:20px;border:1px solid #e5e7eb}
+        .tab-content.active{display:block}
+        
+        .search-box{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+        .search-box input{flex:1;min-width:200px;padding:12px 16px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+        .search-box button{padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:600}
+        .search-box .primary{background:#6366f1;color:#fff}
+        .search-box .green{background:#10b981;color:#fff}
+        .search-box .orange{background:#f59e0b;color:#fff}
+        
+        .result-item{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;border-left:4px solid #6366f1}
+        .result-item h3{font-size:15px;margin-bottom:4px;color:#1e293b}
+        .result-item .meta{font-size:12px;color:#888;margin-bottom:8px}
+        .result-item .content{font-size:13px;color:#444;line-height:1.6;max-height:80px;overflow:hidden;word-break:break-all}
+        .result-item .score{font-size:11px;color:#6366f1;margin-top:6px}
+        .result-item .actions{display:flex;gap:6px;margin-top:8px}
+        .result-item .actions button{padding:4px 12px;border:none;border-radius:4px;cursor:pointer;font-size:12px}
+        .result-item .actions .view{background:#eef2ff;color:#6366f1}
+        .result-item .actions .delete{background:#fee2e2;color:#ef4444}
+        .result-item .url-link{display:block;font-size:11px;color:#6366f1;margin-top:4px;word-break:break-all}
+        .result-item .url-link a{color:#6366f1;text-decoration:none}
+        .result-item .url-link a:hover{text-decoration:underline}
+        
+        .empty{text-align:center;padding:60px;color:#888}
+        .answer-box{background:#eef2ff;padding:16px;border-radius:8px;margin-bottom:20px;border-left:4px solid #6366f1}
+        .answer-box .sources{font-size:12px;color:#888;margin-top:8px}
+        
+        .config-group{border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:16px}
+        .config-group h3{font-size:14px;margin-bottom:12px;color:#444;display:flex;align-items:center;gap:8px}
+        .config-row{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+        .config-row label{font-size:13px;color:#666;min-width:100px}
+        .config-row input[type="text"],.config-row input[type="number"],.config-row select{flex:1;min-width:120px;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px}
+        .config-row input[type="checkbox"]{width:18px;height:18px;cursor:pointer}
+        
+        .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+        .stat-card{background:#f8fafc;padding:16px;border-radius:8px;text-align:center}
+        .stat-card .num{font-size:28px;font-weight:700;color:#6366f1}
+        .stat-card .label{font-size:12px;color:#888;margin-top:4px}
+        
+        .config-json{background:#0f172a;color:#e2e8f0;font-family:monospace;font-size:12px;padding:12px;border-radius:6px;max-height:300px;overflow:auto;white-space:pre-wrap}
+        .save-status{font-size:13px;color:#888;margin-left:12px}
+        .save-status.success{color:#10b981}
+        .save-status.error{color:#ef4444}
+        
+        .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        .modal-content{background:#fff;border-radius:12px;max-width:800px;width:100%;max-height:80vh;padding:24px;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+        .modal-content h2{font-size:18px;margin-bottom:12px}
+        .modal-content .body{font-size:14px;line-height:1.8;background:#f8fafc;padding:16px;border-radius:6px;max-height:400px;overflow-y:auto}
+        .modal-content .body pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;overflow:auto;font-size:12px;font-family:monospace}
+        .modal-content .body code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;font-family:monospace}
+        .modal-content .body a{color:#6366f1;text-decoration:none}
+        .modal-content .body a:hover{text-decoration:underline}
+        .modal-content .footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+        
+        .btn{padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+        .btn-primary{background:#6366f1;color:#fff}
+        .btn-primary:hover{background:#5558e6}
+        .btn-success{background:#10b981;color:#fff}
+        .btn-success:hover{background:#059669}
+        .btn-danger{background:#ef4444;color:#fff}
+        .btn-danger:hover{background:#dc2626}
+        .btn-warning{background:#f59e0b;color:#fff}
+        .btn-warning:hover{background:#d97706}
+        .btn-sm{padding:4px 12px;font-size:12px}
+        .hint{font-size:11px;color:#999;margin-left:8px}
+        .source-tag{display:inline-block;background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:4px;font-size:11px;margin:2px}
+        .summary-box{background:#eef2ff;padding:12px 16px;border-radius:6px;border-left:3px solid #6366f1;margin-bottom:12px}
+        .route-list-container{max-height:300px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;padding:8px}
+        .route-group{border-bottom:1px solid #f0f0f0;padding:6px 0}
+        .route-group:last-child{border-bottom:none}
+        .route-group .group-header{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0}
+        .route-group .group-header:hover{background:#f8fafc}
+        .route-group .group-header input[type="checkbox"]{width:16px;height:16px;cursor:pointer}
+        .route-group .group-header .name{font-weight:600;font-size:13px}
+        .route-group .group-header .count{font-size:11px;color:#888;margin-left:4px}
+        .route-group .group-header .toggle{font-size:11px;color:#6366f1;margin-left:auto;cursor:pointer}
+        .route-group .route-items{display:none;padding-left:32px;font-size:12px;color:#999;gap:2px;flex-wrap:wrap}
+        .route-group .route-items.open{display:flex}
+        .route-group .route-items span{background:#f5f5f5;padding:2px 8px;border-radius:4px;margin:2px}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📚 知识库</h1>
+        <div class="tabs">
+            <button class="active" data-tab="search">🔍 搜索/问答</button>
+            <button data-tab="config">⚙️ 配置</button>
+            <button data-tab="stats">📊 统计</button>
+        </div>
+    </div>
+
+    <!-- ========== TAB 1: 搜索/问答 ========== -->
+    <div class="tab-content active" id="tab-search">
+        <div class="search-box">
+            <input id="queryInput" placeholder="输入关键词或问题..." onkeydown="if(event.key==='Enter')handleEnter()">
+            <button class="primary" onclick="doSearch()">🔍 搜索</button>
+            <button class="green" onclick="toggleAsk()" id="askToggleBtn">🤖 问答</button>
+            <button class="orange" onclick="resetSearch()">🔄 重置</button>
+        </div>
+        
+        <div id="results">
+            <div class="empty">🔍 输入关键词搜索，或点击「问答」提问</div>
+        </div>
+    </div>
+
+    <!-- ========== TAB 2: 配置 ========== -->
+    <div class="tab-content" id="tab-config">
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+            <button class="btn btn-success" onclick="loadConfig()">🔄 加载配置</button>
+            <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
+            <button class="btn btn-warning" onclick="resetConfig()">↩️ 重置默认</button>
+        </div>
+        <div id="saveStatus" class="save-status"></div>
+        <div id="configForm"></div>
+        <div style="margin-top:16px;border-top:1px solid #e5e7eb;padding-top:16px;">
+            <h3>📄 当前配置 (JSON)</h3>
+            <div class="config-json" id="configPreview">{}</div>
+        </div>
+    </div>
+
+    <!-- ========== TAB 3: 统计 ========== -->
+    <div class="tab-content" id="tab-stats">
+        <div style="display:flex;gap:10px;margin-bottom:16px;">
+            <button class="btn btn-primary" onclick="loadStats()">🔄 刷新统计</button>
+        </div>
+        <div id="statsContent"></div>
+    </div>
+</div>
+
+<script>
+const API = '/api/builtins/knowledge_base/main';
+const LIST_API = '/api/list';
+let isAskMode = false;
+let routeGroups = {};
+let allRoutes = [];
+const DEFAULT_CONFIG = {
+    "auto_save": {
+        "enabled": true,
+        "min_length": 50,
+        "max_length": 100000,
+        "similarity_threshold": 0.85,
+        "exclude_patterns": ["heartbeat", "ping", "status"],
+        "allowed_routes": []
+    },
+    "summary": {
+        "enabled": false,
+        "min_length": 200,
+        "only_on_demand": true
+    },
+    "chroma": {
+        "enabled": true,
+        "model": "BAAI/bge-m3",
+        "collection": "knowledge_base"
+    }
+};
+
+// ============================================================
+// 工具函数
+// ============================================================
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function extractUrlFromText(text) {
+    if (!text) return '';
+    // 匹配 URL：xxx 格式（支持有协议和无协议）
+    const match = text.match(/URL[：:]\s*((?:https?:\/\/)?[^\s\n]+)/);
+    if (match) {
+        let url = match[1];
+        // 如果没有协议头，补上 https://
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            url = 'https://' + url;
+        }
+        return url;
+    }
+    const match2 = text.match(/https?:\/\/[^\s\n]+/);
+    if (match2) return match2[0];
+    return '';
+}
+
+function renderMarkdown(text) {
+    if (!text) return '';
+    let html = text.replace(/\\n/g, '\n');
+    html = escapeHtml(html);
+    html = html.replace(/((?:\|.+?\|\s*\n)+)/g, function(match) {
+        const rows = match.trim().split('\n').filter(row => row.includes('|'));
+        if (rows.length < 2) return match;
+        let tableHtml = '<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">';
+        let isHeader = true;
+        rows.forEach(row => {
+            if (/^\|[\s\-:|]+\|$/.test(row.trim())) {
+                isHeader = false;
+                return;
+            }
+            const cells = row.split('|').filter(c => c.trim());
+            const tag = isHeader ? 'th' : 'td';
+            const style = isHeader ? 'background:#f1f5f9;font-weight:600;' : '';
+            tableHtml += '<tr>';
+            cells.forEach(cell => {
+                const clean = cell.trim().replace(/\n/g, ' ');
+                tableHtml += `<${tag} style="border:1px solid #e5e7eb;padding:6px 10px;text-align:left;${style}">${clean}</${tag}>`;
+            });
+            tableHtml += '</tr>';
+        });
+        tableHtml += '</table>';
+        return tableHtml;
+    });
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    html = html.replace(/\n/g, '<br>');
+    return html;
+}
+
+// ============================================================
+// 标签切换
+// ============================================================
+document.querySelectorAll('.header .tabs button').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.header .tabs button').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+        if (this.dataset.tab === 'config') loadConfig();
+        if (this.dataset.tab === 'stats') loadStats();
+    });
+});
+
+// ============================================================
+// 搜索/问答
+// ============================================================
+function toggleAsk() {
+    isAskMode = !isAskMode;
+    document.getElementById('askToggleBtn').textContent = isAskMode ? '❌ 退出问答' : '🤖 问答';
+    document.getElementById('queryInput').placeholder = isAskMode ? '问个问题...' : '输入关键词搜索...';
+}
+
+function handleEnter() {
+    if (isAskMode) doAsk();
+    else doSearch();
+}
+
+function doSearch() {
+    if (isAskMode) {
+        isAskMode = false;
+        document.getElementById('askToggleBtn').textContent = '🤖 问答';
+        document.getElementById('queryInput').placeholder = '输入关键词搜索...';
+    }
+    const query = document.getElementById('queryInput').value.trim();
+    if (query) {
+        searchQuery(query);
+    } else {
+        showEmpty('🔍', '输入关键词搜索');
+    }
+}
+
+async function doAsk() {
+    const query = document.getElementById('queryInput').value.trim();
+    if (!query) { showEmpty('🤖', '请输入问题'); return; }
+    document.getElementById('results').innerHTML = '<div style="text-align:center;padding:20px">🤔 思考中...</div>';
+    try {
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'ask', params: {query}})
+        });
+        const data = await res.json();
+        if (!data.ok) { document.getElementById('results').innerHTML = `<div class="empty">❌ ${data.error}</div>`; return; }
+        let html = `<div class="answer-box"><div style="font-weight:600;margin-bottom:4px;">💡 回答</div><div>${renderMarkdown(data.answer)}</div>`;
+        if (data.sources && data.sources.length) {
+            html += `<div class="sources" style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">`;
+            html += `<div style="font-weight:500;font-size:13px;color:#6366f1;margin-bottom:8px;">📚 引用来源</div>`;
+            data.sources.forEach(s => {
+                const url = s.url || s.metadata?.url || extractUrlFromText(s.content || '');
+                const urlDisplay = url ? `🔗 <a href="${url}" target="_blank" style="color:#6366f1;text-decoration:none;font-size:11px;">${escapeHtml(url)}</a>` : '';
+                html += `
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;">
+                        <span style="font-size:13px;color:#6366f1;cursor:pointer;font-weight:500;" onclick="viewEntry('${s.id}')">
+                            📖 ${escapeHtml(s.title || '未命名')}
+                        </span>
+                        <span style="font-size:11px;color:#888;">${s.type || '未知'}</span>
+                        ${s.score ? `<span style="font-size:11px;color:#10b981;margin-left:auto;">相关度 ${(s.score * 100).toFixed(0)}%</span>` : ''}
+                        ${urlDisplay ? `<span style="font-size:11px;color:#999;width:100%;padding-left:4px;">${urlDisplay}</span>` : ''}
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        }
+        html += '</div>';
+        document.getElementById('results').innerHTML = html;
+    } catch(e) {
+        document.getElementById('results').innerHTML = `<div class="empty">❌ ${e.message}</div>`;
+    }
+}
+
+function showEmpty(icon, msg) {
+    document.getElementById('results').innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:12px;">${icon}</div><div>${msg}</div></div>`;
+}
+
+function resetSearch() {
+    document.getElementById('queryInput').value = '';
+    if (isAskMode) {
+        isAskMode = false;
+        document.getElementById('askToggleBtn').textContent = '🤖 问答';
+        document.getElementById('queryInput').placeholder = '输入关键词搜索...';
+    }
+    showEmpty('🔍', '输入关键词搜索，或点击「问答」提问');
+}
+
+// ============================================================
+// 搜索
+// ============================================================
+async function searchQuery(query) {
+    document.getElementById('results').innerHTML = '<div style="text-align:center;padding:20px">⏳ 搜索中...</div>';
+    try {
+        const res = await fetch(API, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'search', params: {query}})
+        });
+        const data = await res.json();
+        if (!data.ok) { document.getElementById('results').innerHTML = `<div class="empty">❌ ${data.error}</div>`; return; }
+        if (!data.results || data.results.length === 0) {
+            document.getElementById('results').innerHTML = `<div class="empty">📭 没有找到相关内容</div>`;
+            return;
+        }
+        document.getElementById('results').innerHTML = data.results.map(r => renderResult(r)).join('');
+    } catch(e) {
+        document.getElementById('results').innerHTML = `<div class="empty">❌ ${e.message}</div>`;
+    }
+}
+
+function renderResult(r) {
+    const content = r.content || r.content_preview || '';
+    let preview = content.substring(0, 200);
+    const score = r.score ? `<div class="score">相关度: ${(r.score * 100).toFixed(0)}%</div>` : '';
+    let url = r.url || r.metadata?.url || extractUrlFromText(content);
+    const summary = r.summary || r.metadata?.summary || '';
+    const entryType = r.type || r.metadata?.source_type || '';
+    const fileId = r.metadata?.file_id || '';
+    const fileName = r.metadata?.file_name || '';
+    
+    if (summary) preview = summary.substring(0, 200);
+    
+    // URL 链接
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    const urlHtml = url ? `<div class="url-link">🔗 <a href="${url}" target="_blank">${escapeHtml(url)}</a></div>` : '';
+    
+    // 🔥 图片缩略图
+    let thumbHtml = '';
+    if (entryType === 'image' && fileId) {
+        const thumbParams = encodeURIComponent(JSON.stringify({file_id: fileId, thumb: true}));
+        const thumbUrl = `/api/builtins/knowledge_base/main?action=file&params=${thumbParams}`;
+        thumbHtml = `<div style="margin-top:6px;"><img src="${thumbUrl}" style="max-width:80px;max-height:60px;border-radius:4px;border:1px solid #e5e7eb;" loading="lazy" onerror="this.style.display='none'"></div>`;
+    }
+    
+    // 类型图标
+    const typeIcons = {
+        'screenshot': '📸',
+        'image': '🖼️',
+        'link': '🔗',
+        'text': '📝',
+        'code': '💻',
+        'document': '📄',
+        'webpage': '🌐',
+        'summary': '📋',
+        'file': '📁'
+    };
+    const icon = typeIcons[entryType] || typeIcons[r.type] || '📄';
+
+    return `
+        <div class="result-item" data-id="${r.id}">
+            <h3>${icon} ${escapeHtml(r.title || '未命名')}</h3>
+            <div class="meta">${entryType || r.type || '未知'} · ${r.source || '未知'} ${r.created_at ? '· ' + new Date(r.created_at).toLocaleDateString() : ''}</div>
+            <div class="content">${escapeHtml(preview)}${preview.length >= 200 ? '...' : ''}</div>
+            ${thumbHtml}
+            ${urlHtml}
+            ${score}
+            <div class="actions">
+                <button class="view" onclick="viewEntry('${r.id}')">📖 查看</button>
+                <button class="delete" onclick="deleteEntry('${r.id}')">🗑️ 删除</button>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// 查看明细
+// ============================================================
+async function viewEntry(entryId) {
+    const res = await fetch('/api/builtins/knowledge_base/main', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            action: 'get',
+            params: {entry_id: entryId}
+        })
+    });
+    const data = await res.json();
+    if (data.ok && data.entry) {
+        console.log('传给 showModal 的 entry:', data.entry);  // 🔥 加这行
+        showModal(data.entry);
+    } else {
+        alert('未找到该条目');
+    }
+}
+
+function showModal(entry) {
+    console.log('showModal entry:', entry);
+    console.log('showModal metadata:', entry.metadata);
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    
+    const content = entry.content || entry.content_preview || '无内容';
+    const summary = entry.summary || entry.metadata?.summary || '';
+    const keyInfo = entry.metadata?.key_info || '';
+    const entryType = entry.type || entry.metadata?.source_type || '';
+    const fileId = entry.metadata?.file_id || '';
+    console.log('showModal file_id:', fileId);  // 🔥 加这行
+    const fileName = entry.metadata?.file_name || '';
+    const fileSize = entry.metadata?.file_size || 0;
+    let url = entry.url || entry.metadata?.url || extractUrlFromText(content);
+    
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    
+    let htmlContent = '';
+    
+    // 摘要
+    if (summary && summary !== content) {
+        htmlContent += `<div class="summary-box"><div style="font-weight:600;font-size:13px;color:#1e293b;margin-bottom:4px;">📌 摘要</div><div>${escapeHtml(summary)}</div></div>`;
+    }
+    
+    // 🔥 图片显示（使用 GET 请求，img 直接加载）
+    if (entryType === 'image' && fileId) {
+        const thumbParams = encodeURIComponent(JSON.stringify({file_id: fileId, thumb: true}));
+        const fullParams = encodeURIComponent(JSON.stringify({file_id: fileId}));
+        const thumbUrl = `/api/builtins/knowledge_base/main?action=file&params=${thumbParams}`;
+        const fullUrl = `/api/builtins/knowledge_base/main?action=file&params=${fullParams}`;
+        htmlContent += `
+            <div style="margin-bottom:12px;text-align:center;">
+                <img src="${thumbUrl}" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid #e5e7eb;" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%239ca3af%22 font-family=%22sans-serif%22 font-size=%2214%22%3E%E5%9B%BE%E7%89%87%E5%8A%A0%E8%BD%BD%E5%A4%B1%E8%B4%A5%3C/text%3E%3C/svg%3E'">
+                <div style="font-size:11px;color:#888;margin-top:4px;">
+                    <a href="${fullUrl}" target="_blank" style="color:#6366f1;text-decoration:none;">🖼️ 查看原图</a>
+                    ${fileName ? ` · ${escapeHtml(fileName)}` : ''}
+                    ${fileSize ? ` · ${(fileSize / 1024).toFixed(1)} KB` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 🔥 文件显示（非图片）
+    if (entryType === 'file' && fileId && fileName) {
+        const fileParams = encodeURIComponent(JSON.stringify({file_id: fileId}));
+        const fileUrl = `/api/builtins/knowledge_base/main?action=file&params=${fileParams}`;
+        htmlContent += `
+            <div style="margin-bottom:12px;padding:12px 16px;background:#f0fdf4;border-radius:8px;border:1px solid #dcfce7;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="font-size:32px;">📁</span>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;color:#1e293b;">${escapeHtml(fileName)}</div>
+                        <div style="font-size:12px;color:#888;">${fileSize ? (fileSize / 1024).toFixed(1) + ' KB' : '未知大小'}</div>
+                    </div>
+                    <a href="${fileUrl}" download style="background:#16a34a;color:#fff;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500;">📥 下载</a>
+                </div>
+            </div>
+        `;
+    }
+    
+    // URL 链接
+    if (url && url !== '无') {
+        htmlContent += `<div style="margin-bottom:12px;padding:8px 12px;background:#f0f7ff;border-radius:6px;word-break:break-all;">🔗 <a href="${url}" target="_blank" style="color:#6366f1;text-decoration:none;font-weight:500;">${escapeHtml(url)}</a> <span style="font-size:11px;color:#888;">（点击跳转）</span></div>`;
+    }
+    
+    // 关键信息
+    if (keyInfo) {
+        htmlContent += `<div style="margin-bottom:12px;padding:8px 12px;background:#f8fafc;border-radius:6px;"><div style="font-weight:600;font-size:12px;color:#888;margin-bottom:4px;">📋 关键信息</div><div>${escapeHtml(keyInfo)}</div></div>`;
+    }
+    
+    // 内容主体（Markdown 渲染）
+    let displayContent = content;
+    if (url) {
+        displayContent = displayContent.replace(/URL[：:]\s*https?:\/\/[^\s\n]+\s*\n?/, '');
+    }
+    htmlContent += `<div style="font-size:13px;line-height:1.8;">${renderMarkdown(displayContent)}</div>`;
+    
+    // 元数据标签
+    let metaTags = '';
+    if (entryType) {
+        const typeLabels = {
+            'screenshot': '📸 截屏',
+            'image': '🖼️ 图片',
+            'link': '🔗 链接',
+            'webpage': '🌐 网页',
+            'code': '💻 代码',
+            'document': '📄 文档',
+            'text': '📝 文本',
+            'summary': '📋 摘要',
+            'file': '📁 文件'
+        };
+        metaTags += `<span class="source-tag">${typeLabels[entryType] || entryType}</span>`;
+    }
+    if (entry.source) {
+        metaTags += `<span class="source-tag">📡 ${escapeHtml(entry.source)}</span>`;
+    }
+    if (fileName) {
+        metaTags += `<span class="source-tag">📄 ${escapeHtml(fileName)}</span>`;
+    }
+    
+    overlay.innerHTML = `
+        <div class="modal-content">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                <h2 style="font-size:18px;">${escapeHtml(entry.title || '未命名')}</h2>
+                <button onclick="this.closest('.modal-overlay').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#888;">✕</button>
+            </div>
+            <div class="meta-info" style="font-size:12px;color:#888;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                ${metaTags}
+                ${entry.created_at ? '· ' + new Date(entry.created_at).toLocaleString() : ''}
+                ${entry.updated_at && entry.updated_at !== entry.created_at ? '· 更新于 ' + new Date(entry.updated_at).toLocaleString() : ''}
+            </div>
+            <div class="body">${htmlContent}</div>
+            <div class="footer" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
+                ${entryType === 'image' && fileId ? `<button class="btn btn-primary btn-sm" onclick="window.open('/api/builtins/knowledge_base/main?action=file&params=${encodeURIComponent(JSON.stringify({file_id: fileId}))}', '_blank')">🖼️ 查看原图</button>` : ''}
+                ${entryType === 'file' && fileId ? `<button class="btn btn-primary btn-sm" onclick="window.open('/api/builtins/knowledge_base/main?action=file&params=${encodeURIComponent(JSON.stringify({file_id: fileId}))}', '_blank')">📥 下载文件</button>` : ''}
+                <button class="btn btn-danger btn-sm" onclick="deleteEntry('${entry.id}');this.closest('.modal-overlay').remove();">🗑️ 删除</button>
+                <button class="btn btn-sm" onclick="this.closest('.modal-overlay').remove()">关闭</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+// ============================================================
+// 删除
+// ============================================================
+async function deleteEntry(entryId) {
+    if (!confirm('确定删除这条记录吗？')) return;
+    try {
+        const res = await fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',params:{entry_id:entryId}})});
+        const data = await res.json();
+        if (data.ok) {
+            const item = document.querySelector(`.result-item[data-id="${entryId}"]`);
+            if (item) item.remove();
+            const remaining = document.querySelectorAll('.result-item');
+            if (remaining.length === 0) {
+                document.getElementById('results').innerHTML = `<div class="empty">📭 已删除，知识库为空</div>`;
+            }
+        } else { alert('删除失败: ' + (data.error || '未知错误')); }
+    } catch(e) { alert('删除失败: ' + e.message); }
+}
+
+// ============================================================
+// 配置管理
+// ============================================================
+function renderConfigForm(config) {
+    const auto = config.auto_save || DEFAULT_CONFIG.auto_save;
+    const summary = config.summary || DEFAULT_CONFIG.summary;
+    const chroma = config.chroma || DEFAULT_CONFIG.chroma;
+    const allowedRoutes = auto.allowed_routes || [];
+    document.getElementById('configForm').innerHTML = `
+        <div class="config-group">
+            <h3>📥 自动捕获配置</h3>
+            <div class="config-row"><label>启用自动捕获</label><input type="checkbox" id="cfg_enabled" ${auto.enabled ? 'checked' : ''}><span class="hint">开启后，外部 API 响应自动存入</span></div>
+            <div class="config-row"><label>最小内容长度</label><input type="number" id="cfg_min_length" value="${auto.min_length || 50}" min="10" max="1000"><span class="hint">低于此长度不存入</span></div>
+            <div class="config-row"><label>最大内容长度</label><input type="number" id="cfg_max_length" value="${auto.max_length || 100000}" min="1000" max="1000000"><span class="hint">超过此长度截断</span></div>
+            <div class="config-row"><label>相似度阈值</label><input type="number" id="cfg_similarity" value="${auto.similarity_threshold || 0.85}" min="0.5" max="1" step="0.05"><span class="hint">高于此值视为重复，不存入</span></div>
+            <div class="config-row"><label>排除模式</label><input type="text" id="cfg_exclude" value="${(auto.exclude_patterns || []).join(', ')}" placeholder="用逗号分隔"><span class="hint">匹配这些模式的内容不存入</span></div>
+        </div>
+        <div class="config-group">
+            <h3>🎯 自动捕获路由</h3>
+            <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+                <button class="btn btn-sm btn-primary" onclick="selectAllRoutes()">全选</button>
+                <button class="btn btn-sm btn-warning" onclick="deselectAllRoutes()">全不选</button>
+                <button class="btn btn-sm btn-success" onclick="toggleRouteGroup()">展开/折叠</button>
+                <span class="hint">只有勾选的路由才会自动捕获</span>
+            </div>
+            <div class="route-list-container" id="routeList"><div style="text-align:center;padding:20px;color:#888;">加载中...</div></div>
+        </div>
+        <div class="config-group">
+            <h3>📝 摘要配置</h3>
+            <div class="config-row"><label>启用自动摘要</label><input type="checkbox" id="cfg_summary_enabled" ${summary.enabled ? 'checked' : ''}><span class="hint">消耗 LLM</span></div>
+            <div class="config-row"><label>摘要最小长度</label><input type="number" id="cfg_summary_min" value="${summary.min_length || 200}" min="100" max="1000"><span class="hint">超过此长度才生成</span></div>
+            <div class="config-row"><label>按需生成</label><input type="checkbox" id="cfg_summary_ondemand" ${summary.only_on_demand !== false ? 'checked' : ''}><span class="hint">只在用户主动请求时生成</span></div>
+        </div>
+        <div class="config-group">
+            <h3>🧠 向量存储 (ChromaDB)</h3>
+            <div class="config-row"><label>启用向量搜索</label><input type="checkbox" id="cfg_chroma_enabled" ${chroma.enabled !== false ? 'checked' : ''}><span class="hint">关闭后只使用关键词搜索</span></div>
+            <div class="config-row"><label>向量模型</label>
+                <select id="cfg_chroma_model">
+                    <option value="BAAI/bge-m3" ${chroma.model === 'BAAI/bge-m3' ? 'selected' : ''}>BGE-M3 (中文最佳, ~4GB)</option>
+                    <option value="paraphrase-multilingual-MiniLM-L12-v2" ${chroma.model === 'paraphrase-multilingual-MiniLM-L12-v2' ? 'selected' : ''}>多语言模型 (~500MB)</option>
+                    <option value="all-MiniLM-L6-v2" ${chroma.model === 'all-MiniLM-L6-v2' ? 'selected' : ''}>英文模型 (~80MB)</option>
+                    <option value="shibing624/text2vec-base-chinese" ${chroma.model === 'shibing624/text2vec-base-chinese' ? 'selected' : ''}>中文模型 (~400MB)</option>
+                </select>
+                <span class="hint">首次使用自动下载</span>
+            </div>
+        </div>
+    `;
+    // 加载路由列表
+    loadRouteList(allowedRoutes);
+    document.getElementById('configPreview').textContent = JSON.stringify(config, null, 2);
+}
+
+function getConfigFromForm() {
+    const getVal = (id, fallback) => {
+        const el = document.getElementById(id);
+        if (!el) return fallback;
+        if (el.type === 'checkbox') return el.checked;
+        return el.value;
+    };
+    return {
+        "auto_save": {
+            "enabled": getVal('cfg_enabled', true),
+            "min_length": parseInt(getVal('cfg_min_length', 50)) || 50,
+            "max_length": parseInt(getVal('cfg_max_length', 100000)) || 100000,
+            "similarity_threshold": parseFloat(getVal('cfg_similarity', 0.85)) || 0.85,
+            "exclude_patterns": (getVal('cfg_exclude', '') || '').split(',').map(s => s.trim()).filter(Boolean),
+            "allowed_routes": getSelectedRoutes()
+        },
+        "summary": {
+            "enabled": getVal('cfg_summary_enabled', false),
+            "min_length": parseInt(getVal('cfg_summary_min', 200)) || 200,
+            "only_on_demand": getVal('cfg_summary_ondemand', true)
+        },
+        "chroma": {
+            "enabled": getVal('cfg_chroma_enabled', true),
+            "model": getVal('cfg_chroma_model', 'BAAI/bge-m3'),
+            "collection": "knowledge_base"
+        }
+    };
+}
+
+// ============================================================
+// 路由列表
+// ============================================================
+async function loadRouteList(allowed) {
+    try {
+        const res = await fetch(LIST_API);
+        const data = await res.json();
+        const rawList = data.apis || [];
+        const routes = rawList.map(item => {
+            if (typeof item === 'string') return item;
+            if (typeof item === 'object' && item && item.route) return item.route;
+            return null;
+        }).filter(r => r && r.startsWith('/'));
+        allRoutes = routes;
+        routeGroups = {};
+        allRoutes.forEach(route => {
+            const parts = route.split('/');
+            if (parts.length >= 4) {
+                const key = parts[2] + '/' + parts[3];
+                if (!routeGroups[key]) routeGroups[key] = [];
+                routeGroups[key].push(route);
+            }
+        });
+        renderRouteList(allowed || []);
+    } catch(e) {
+        document.getElementById('routeList').innerHTML = `<div style="text-align:center;padding:20px;color:#888;">❌ 加载失败</div>`;
+    }
+}
+
+function renderRouteList(allowed) {
+    const container = document.getElementById('routeList');
+    const keys = Object.keys(routeGroups).sort();
+    if (keys.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">📭 没有找到路由</div>';
+        return;
+    }
+    let html = '';
+    keys.forEach(key => {
+        const routes = routeGroups[key] || [];
+        const allChecked = routes.every(r => allowed.some(a => r.startsWith(a) || a === r));
+        html += `
+            <div class="route-group" data-group="${key}">
+                <div class="group-header" onclick="toggleRouteGroupItem('${key}')">
+                    <input type="checkbox" class="group-checkbox" data-group="${key}" ${allChecked ? 'checked' : ''} onclick="event.stopPropagation();toggleGroupAll('${key}')">
+                    <span class="name">📁 ${key}</span>
+                    <span class="count">(${routes.length} 个路由)</span>
+                    <span class="toggle" onclick="event.stopPropagation();toggleRouteItems('${key}')">展开</span>
+                </div>
+                <div class="route-items" id="items_${key}">${routes.map(r => `<span>${r}</span>`).join('')}</div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function toggleRouteGroupItem(key) {
+    const items = document.getElementById('items_' + key);
+    if (items) { items.classList.toggle('open'); const toggle = items.closest('.route-group').querySelector('.toggle'); if (toggle) toggle.textContent = items.classList.contains('open') ? '收起' : '展开'; }
+}
+
+function toggleRouteItems(key) {
+    const items = document.getElementById('items_' + key);
+    if (items) { items.classList.toggle('open'); const toggle = items.closest('.route-group').querySelector('.toggle'); if (toggle) toggle.textContent = items.classList.contains('open') ? '收起' : '展开'; }
+}
+
+function toggleRouteGroup() {
+    const allOpen = document.querySelectorAll('.route-items.open').length > 0;
+    document.querySelectorAll('.route-items').forEach(el => {
+        if (allOpen) el.classList.remove('open');
+        else el.classList.add('open');
+        const toggle = el.closest('.route-group').querySelector('.toggle');
+        if (toggle) toggle.textContent = allOpen ? '展开' : '收起';
+    });
+}
+
+function toggleGroupAll(key) {
+    const checkbox = document.querySelector(`.group-checkbox[data-group="${key}"]`);
+    const isChecked = checkbox.checked;
+    const routes = routeGroups[key] || [];
+    routes.forEach(r => { const cb = document.querySelector(`input[type="checkbox"][data-route="${r}"]`); if (cb) cb.checked = isChecked; });
+}
+
+function selectAllRoutes() { document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = true); }
+function deselectAllRoutes() { document.querySelectorAll('.group-checkbox').forEach(cb => cb.checked = false); }
+
+function getSelectedRoutes() {
+    const selected = [];
+    document.querySelectorAll('.group-checkbox:checked').forEach(cb => {
+        const key = cb.dataset.group;
+        const routes = routeGroups[key] || [];
+        selected.push(...routes);
+    });
+    return selected;
+}
+
+async function loadConfig() {
+    try {
+        const res = await fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'config_get'})});
+        const data = await res.json();
+        const config = data.config || DEFAULT_CONFIG;
+        renderConfigForm(config);
+        document.getElementById('saveStatus').textContent = '✅ 已加载';
+        document.getElementById('saveStatus').className = 'save-status success';
+    } catch(e) {
+        renderConfigForm(DEFAULT_CONFIG);
+        document.getElementById('saveStatus').textContent = '⚠️ 加载失败，使用默认配置';
+        document.getElementById('saveStatus').className = 'save-status error';
+    }
+}
+
+async function saveConfig() {
+    const config = getConfigFromForm();
+    try {
+        const res = await fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'config_set',params:{config:config}})});
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('saveStatus').textContent = '✅ 配置已保存';
+            document.getElementById('saveStatus').className = 'save-status success';
+            document.getElementById('configPreview').textContent = JSON.stringify(config, null, 2);
+        } else {
+            document.getElementById('saveStatus').textContent = '❌ 保存失败: ' + (data.error || '未知错误');
+            document.getElementById('saveStatus').className = 'save-status error';
+        }
+    } catch(e) {
+        document.getElementById('saveStatus').textContent = '❌ 保存失败: ' + e.message;
+        document.getElementById('saveStatus').className = 'save-status error';
+    }
+}
+
+function resetConfig() {
+    if (!confirm('重置为默认配置？')) return;
+    renderConfigForm(DEFAULT_CONFIG);
+    document.getElementById('saveStatus').textContent = '↩️ 已重置为默认配置，点击保存生效';
+    document.getElementById('saveStatus').className = 'save-status';
+}
+
+// ============================================================
+// 统计
+// ============================================================
+async function loadStats() {
+    document.getElementById('statsContent').innerHTML = '<div style="text-align:center;padding:20px">⏳ 加载中...</div>';
+    try {
+        const res = await fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'stats'})});
+        const data = await res.json();
+        if (!data.ok) { document.getElementById('statsContent').innerHTML = `<div class="empty">❌ ${data.error}</div>`; return; }
+        const byType = data.by_type || {};
+        const typeLabels = {'screenshot':'📸 截屏','link':'🔗 链接','text':'📝 文本','code':'💻 代码','document':'📄 文档','webpage':'🌐 网页','summary':'📋 摘要','project_analysis':'📦 项目','mindmap':'🧠 导图','note':'📋 笔记','api_response':'🌐 API'};
+        let html = `<div class="stat-grid">`;
+        html += `<div class="stat-card"><div class="num">${data.total || 0}</div><div class="label">📚 总条目</div></div>`;
+        html += `<div class="stat-card"><div class="num">${data.sources || 0}</div><div class="label">📡 来源数</div></div>`;
+
+       const chromaStatus = data.chroma_available ? '✅' : '❌';
+html += `<div class="stat-card"><div class="num">${chromaStatus}</div><div class="label">🧠 向量搜索</div></div>`;
+        html += `</div><h3 style="margin:16px 0 8px;">📊 按类型分布</h3><div class="stat-grid">`;
+        for (const [type, count] of Object.entries(byType)) {
+            html += `<div class="stat-card"><div class="num">${count}</div><div class="label">${typeLabels[type] || type}</div></div>`;
+        }
+        html += '</div>';
+        document.getElementById('statsContent').innerHTML = html;
+    } catch(e) {
+        document.getElementById('statsContent').innerHTML = `<div class="empty">❌ ${e.message}</div>`;
+    }
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+showEmpty('🔍', '输入关键词搜索，或点击「问答」提问');
+loadConfig();
+</script>
+</body>
+</html>

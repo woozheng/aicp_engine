@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newbula Plus</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:system-ui,-apple-system,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
+        .app{max-width:960px;margin:0 auto;padding:16px}
+        .header{display:flex;justify-content:space-between;align-items:center;padding:16px 0;flex-wrap:wrap;gap:8px}
+        .header h1{font-size:20px;color:#7cffc4}
+        .header-btns{display:flex;gap:6px;flex-wrap:wrap}
+        button{padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-size:12px;transition:all .2s;white-space:nowrap}
+        .btn-start{background:#7cffc4;color:#1a1a2e}
+        .btn-stop{background:#ff6b6b;color:#fff}
+        .btn-clear{background:#333;color:#e0e0e0}
+        button:hover{opacity:.8}
+
+        .platforms{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+        .platform-card{background:#16213e;border-radius:10px;padding:10px 14px;border:1px solid #2a3a5e;cursor:pointer;transition:all .15s;position:relative;font-size:12px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+        .platform-card:hover{border-color:#4ecdc4}
+        .platform-card.selected{border-color:#7cffc4;background:#1a3a2e}
+        .platform-card.offline{opacity:.5}
+        .platform-card .status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+        .status-dot.online{background:#7cffc4}
+        .status-dot.offline{background:#666}
+        .platform-card .check{color:#7cffc4;font-size:12px;display:none}
+        .platform-card.selected .check{display:inline}
+
+        .input-area{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+        .input-area input[type=text]{flex:1;min-width:180px;padding:12px 16px;background:#16213e;border:1px solid #2a3a5e;border-radius:10px;color:#e0e0e0;font-size:13px;outline:none}
+        .input-area input[type=text]:focus{border-color:#7cffc4}
+        .btn-search{background:#7cffc4;color:#1a1a2e;padding:12px 20px;font-size:13px}
+        .btn-file{background:#16213e;color:#e0e0e0;border:1px solid #2a3a5e;cursor:pointer;padding:12px 14px;border-radius:8px;font-size:13px}
+
+        .results{display:flex;flex-direction:column;gap:12px;min-height:100px}
+        .result-card{background:#16213e;border-radius:10px;padding:16px;border:1px solid #2a3a5e;animation:fadeIn .2s;font-size:13px}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .result-card .platform-name{color:#7cffc4;font-weight:600;margin-bottom:8px;font-size:12px}
+        .result-card .content{line-height:1.7}
+        .result-card .content h1,.result-card .content h2,.result-card .content h3{margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:15px}
+        .result-card .content p{margin:6px 0}
+        .result-card .content ul,.result-card .content ol{margin:6px 0;padding-left:18px}
+        .result-card .content li{margin:3px 0}
+        .result-card .content pre{background:#0f0f23;padding:12px;border-radius:6px;overflow-x:auto;margin:10px 0;font-size:12px;white-space:pre-wrap;word-break:break-all;tab-size:4}
+        .result-card .content code{font-family:'JetBrains Mono',monospace;font-size:12px;white-space:pre-wrap}
+        .result-card .content img{max-width:100%;max-height:300px;border-radius:8px;margin:6px 0}
+        .result-card .content a{color:#7cffc4}
+        .result-card .content video{max-width:100%;border-radius:8px;margin:6px 0}
+        .result-card .content audio{width:100%;margin:6px 0}
+        .pending{color:#888;font-style:italic}
+        .error{color:#ff6b6b}
+        .download-btn{display:inline-block;padding:4px 10px;background:#16213e;border:1px solid #7cffc4;border-radius:6px;color:#7cffc4;text-decoration:none;font-size:11px;margin:3px}
+        .download-btn:hover{background:#1a3a2e}
+
+        .image-preview{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;width:100%;min-height:20px}
+        .image-preview img{max-width:60px;max-height:60px;border-radius:6px;border:1px solid #2a3a5e}
+        .preview-item{position:relative;display:inline-block}
+        .preview-item .remove{position:absolute;top:-5px;right:-5px;background:#ff6b6b;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;line-height:18px;text-align:center;cursor:pointer}
+
+        .toast{position:fixed;top:16px;right:16px;background:#7cffc4;color:#1a1a2e;padding:8px 16px;border-radius:8px;font-size:12px;z-index:1000;animation:fadeOut 3s forwards}
+        @keyframes fadeOut{0%,70%{opacity:1}100%{opacity:0}}
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <h1>🤖 Newbula Plus</h1>
+        <div class="header-btns">
+            <button class="btn-start" onclick="startCluster()">▶ 启动</button>
+            <button class="btn-stop" onclick="stopCluster()">⏹ 停止</button>
+            <button class="btn-clear" onclick="clearResults()">🗑 清空</button>
+        </div>
+    </div>
+
+    <div class="platforms" id="platforms"></div>
+
+    <div class="input-area">
+        <div class="image-preview" id="imagePreview"></div>
+        <input type="text" id="queryInput" placeholder="问选中的AI..." onkeydown="if(event.key==='Enter')search()">
+        <button class="btn-file" onclick="document.getElementById('imageInput').click()">🖼️</button>
+        <input type="file" id="imageInput" style="display:none" accept="image/*" multiple onchange="handleImages()">
+        <button class="btn-file" onclick="document.getElementById('fileInput').click()">📎</button>
+        <input type="file" id="fileInput" style="display:none" onchange="handleFiles()">
+        <button class="btn-search" onclick="search()">🚀 搜索</button>
+    </div>
+
+    <div class="results" id="results"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+const API = '/api/builtins/newbula_plus/engine';
+const uploadPort = parseInt(window.location.port) + 2;
+const UPLOAD_URL = `${window.location.protocol}//${window.location.hostname}:${uploadPort}/upload`;
+
+let config = {platforms:[]};
+let status = {probes:{},status:'idle'};
+let selectedPlatforms = new Set();
+let uploadedImages = [];
+let uploadedFiles = [];
+let imageIndex = 0;
+
+async function loadStatus() {
+    try {
+        const [configRes, statusRes] = await Promise.all([
+            fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get_config'})}),
+            fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'status'})})
+        ]);
+        config = await configRes.json();
+        status = await statusRes.json();
+        renderPlatforms();
+    } catch(e) {}
+}
+
+function renderPlatforms() {
+    const platforms = config.platforms || [];
+    if (platforms.length === 0) {
+        document.getElementById('platforms').innerHTML = '<div style="color:#888;font-size:12px">没有平台，请先添加</div>';
+        return;
+    }
+    const html = platforms.map(p => {
+        const probe = status.probes[p.id];
+        const isOnline = probe && probe.status === 'ready';
+        const isSelected = selectedPlatforms.has(p.id);
+        return `<div class="platform-card ${isSelected?'selected':''} ${!isOnline?'offline':''}" onclick="togglePlatform('${p.id}')">
+            <span class="status-dot ${isOnline?'online':'offline'}"></span>
+            <span class="check">✓</span>
+            ${p.name}
+        </div>`;
+    }).join('');
+    document.getElementById('platforms').innerHTML = html;
+}
+
+function togglePlatform(id) {
+    if (selectedPlatforms.has(id)) selectedPlatforms.delete(id);
+    else selectedPlatforms.add(id);
+    renderPlatforms();
+}
+
+function getSelectedIds() {
+    let ids = [...selectedPlatforms];
+    if (ids.length === 0) {
+        ids = Object.entries(status.probes||{}).filter(([_,p])=>p.status==='ready').map(([id])=>id);
+        if (ids.length === 0) { toast('没有在线平台'); return []; }
+    }
+    return ids;
+}
+
+marked.setOptions({
+    gfm: true,
+    tables: true,
+    breaks: true,
+    pedantic: false,
+    smartLists: true
+});
+
+function renderReply(reply, mediaUrls) {
+    let text = '';
+    let urls = [];
+    
+    if (typeof reply === 'object' && reply !== null) {
+        text = reply.reply || '';
+        Object.entries(reply).forEach(([key, val]) => {
+            if (Array.isArray(val) && key !== 'reply') urls = urls.concat(val);
+        });
+    } else {
+        text = reply || '';
+    }
+    urls = urls.concat(mediaUrls || []);
+    urls = [...new Set(urls)];
+
+    // 清理垃圾字符
+    text = text.replace(/📥\s*%[0-9a-fA-F]{2}/g, '');
+    text = text.replace(/📥\s*svg\+xml;base64,[^\s]+/g, '');
+    text = text.replace(/📥\s*[a-f0-9]+~tplv-[^\s]+\.image/g, '');
+    text = text.replace(/~tplv-[^\s]+\.image/g, '');
+    text = text.replace(/data:image\/svg\+xml;base64,[^\s]+/g, '');
+    text = text.replace(/svg\+xml;base64,[^\s]+/g, '');
+    
+    text = text.split('\n')
+        .filter(line => {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('📥') && trimmed.length < 50) return false;
+            if (trimmed.includes('svg+xml;base64')) return false;
+            return true;
+        })
+        .join('\n');
+    text = text.trim();
+
+    // 提取 tplv 图片链接
+    const tplvMatches = text.match(/~tplv-[^\s]+\.image/g);
+    if (tplvMatches) {
+        tplvMatches.forEach(m => {
+            const fullUrl = `https://lf-flow-web-cdn.doubao.com/obj/${m}`;
+            if (!urls.includes(fullUrl)) {
+                urls.push(fullUrl);
+            }
+        });
+        text = text.replace(/~tplv-[^\s]+\.image/g, '');
+    }
+
+    // 检查是否包含 HTML 块
+    const hasPre = /<pre[\s\S]*?<\/pre>/i.test(text);
+    const hasCode = /<code[\s\S]*?<\/code>/i.test(text);
+    const hasTable = /<table[\s\S]*?<\/table>/i.test(text);
+    const hasBlockTag = /<(div|p|h[1-6]|ul|ol|blockquote)/i.test(text);
+    
+    let html = '';
+    
+    // 如果包含 HTML 块，直接处理
+    if ((hasPre || hasCode || hasTable || hasBlockTag) && text.includes('<')) {
+        html = text;
+        html = html.replace(/<pre>/g, '<pre style="background:#0f0f23;padding:12px;border-radius:6px;overflow-x:auto;margin:10px 0;font-size:12px;white-space:pre-wrap;word-break:break-all;tab-size:4;">');
+        html = html.replace(/<code>/g, '<code style="font-family:\'JetBrains Mono\',monospace;font-size:12px;white-space:pre-wrap;">');
+        html = html.replace(/<table/g, '<table style="border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;"');
+        html = html.replace(/<th/g, '<th style="border:1px solid #2a3a5e;padding:8px 12px;background:#1a3a2e;color:#7cffc4;text-align:left;"');
+        html = html.replace(/<td/g, '<td style="border:1px solid #2a3a5e;padding:8px 12px;"');
+        html = html.replace(/<ul>/g, '<ul style="margin:6px 0;padding-left:18px;">');
+        html = html.replace(/<ol>/g, '<ol style="margin:6px 0;padding-left:18px;">');
+        html = html.replace(/<li>/g, '<li style="margin:3px 0;">');
+        html = html.replace(/<p>/g, '<p style="margin:6px 0;">');
+        html = html.replace(/<h1>/g, '<h1 style="margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:18px;">');
+        html = html.replace(/<h2>/g, '<h2 style="margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:16px;">');
+        html = html.replace(/<h3>/g, '<h3 style="margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:14px;">');
+        html = html.replace(/<h4>/g, '<h4 style="margin-top:12px;margin-bottom:4px;color:#7cffc4;font-size:13px;">');
+        // 限制所有图片尺寸
+        html = html.replace(/<img/g, '<img style="max-width:200px;max-height:200px;width:auto;height:auto;border-radius:8px;object-fit:cover;margin:4px;"');
+        
+        // 处理 media_urls 数组里的图片
+        if (urls.length > 0) {
+            let gridHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0;">';
+            urls.forEach(url => {
+                const ext = url.split('?')[0].split('.').pop().toLowerCase();
+                const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'image'];
+                if (imageExts.includes(ext)) {
+                    gridHtml += `<div style="border-radius:8px;overflow:hidden;border:1px solid #2a3a5e;background:#0f0f23;aspect-ratio:1;display:flex;align-items:center;justify-content:center;">
+                        <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" onerror="this.style.display='none'">
+                    </div>`;
+                } else if (['mp4','webm','mov','avi','mkv','flv','wmv'].includes(ext)) {
+                    gridHtml += `<div style="border-radius:8px;overflow:hidden;border:1px solid #2a3a5e;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                        <video src="${url}" controls style="width:100%;display:block;" playsinline></video>
+                    </div>`;
+                } else if (['mp3','wav','ogg','flac','aac'].includes(ext)) {
+                    gridHtml += `<div style="width:100%;">
+                        <audio src="${url}" controls style="width:100%;"></audio>
+                    </div>`;
+                } else if (['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','md'].includes(ext)) {
+                    const name = url.split('/').pop().split('?')[0] || url.substring(0,30);
+                    gridHtml += `<a href="${url}" download class="download-btn">📄 ${name}</a>`;
+                } else {
+                    const name = url.split('/').pop().split('?')[0] || url.substring(0,30);
+                    gridHtml += `<a href="${url}" download class="download-btn">📥 ${name}</a>`;
+                }
+            });
+            gridHtml += '</div>';
+            html += gridHtml;
+        }
+        
+        return html;
+    }
+
+    // 普通文本，走 Markdown 解析
+    let processedText = text;
+    processedText = processedText.replace(/\n{2,}/g, '\n\n');
+    processedText = processedText.replace(/^\|/gm, '\n|');
+    html = marked.parse(processedText);
+
+    // 从文本里提取图片链接
+    const imgRegex = /https?:\/\/[^\s<>"']+\.(jpg|jpeg|png|gif|webp|bmp|image)/gi;
+    const matches = text.match(imgRegex) || [];
+    let allMediaUrls = [...new Set([...matches, ...urls])];
+
+    // 移除已渲染的图片、视频、音频
+    html = html.replace(/<img[^>]+>/gi, '');
+    html = html.replace(/<video[^>]*>[\s\S]*?<\/video>/gi, '');
+    html = html.replace(/<audio[^>]*>[\s\S]*?<\/audio>/gi, '');
+
+    // 所有媒体用 grid 统一排列
+    if (allMediaUrls.length > 0) {
+        let gridHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0;">';
+        allMediaUrls.forEach(url => {
+            const ext = url.split('?')[0].split('.').pop().toLowerCase();
+            const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'image'];
+            if (imageExts.includes(ext)) {
+                gridHtml += `<div style="border-radius:8px;overflow:hidden;border:1px solid #2a3a5e;background:#0f0f23;aspect-ratio:1;display:flex;align-items:center;justify-content:center;">
+                    <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" onerror="this.style.display='none'">
+                </div>`;
+            } else if (['mp4','webm','mov','avi','mkv','flv','wmv'].includes(ext)) {
+                gridHtml += `<div style="border-radius:8px;overflow:hidden;border:1px solid #2a3a5e;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                    <video src="${url}" controls style="width:100%;display:block;" playsinline></video>
+                </div>`;
+            } else if (['mp3','wav','ogg','flac','aac'].includes(ext)) {
+                gridHtml += `<div style="width:100%;">
+                    <audio src="${url}" controls style="width:100%;"></audio>
+                </div>`;
+            } else if (['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','md'].includes(ext)) {
+                const name = url.split('/').pop().split('?')[0] || url.substring(0,30);
+                gridHtml += `<a href="${url}" download class="download-btn">📄 ${name}</a>`;
+            } else {
+                const name = url.split('/').pop().split('?')[0] || url.substring(0,30);
+                gridHtml += `<a href="${url}" download class="download-btn">📥 ${name}</a>`;
+            }
+        });
+        gridHtml += '</div>';
+        html += gridHtml;
+    }
+
+    // 最后再限制一次所有图片尺寸
+    html = html.replace(/<img/g, '<img style="max-width:200px;max-height:200px;width:auto;height:auto;border-radius:8px;object-fit:cover;margin:4px;"');
+    html = html.replace(/<pre>/g, '<pre style="background:#0f0f23;padding:12px;border-radius:6px;overflow-x:auto;margin:10px 0;font-size:12px;white-space:pre-wrap;word-break:break-all;tab-size:4;">');
+    html = html.replace(/<code>/g, '<code style="font-family:\'JetBrains Mono\',monospace;font-size:12px;white-space:pre-wrap;">');
+    html = html.replace(/<table/g, '<table style="border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;"');
+    html = html.replace(/<th/g, '<th style="border:1px solid #2a3a5e;padding:8px 12px;background:#1a3a2e;color:#7cffc4;text-align:left;"');
+    html = html.replace(/<td/g, '<td style="border:1px solid #2a3a5e;padding:8px 12px;"');
+    html = html.replace(/<ul>/g, '<ul style="margin:6px 0;padding-left:18px;">');
+    html = html.replace(/<ol>/g, '<ol style="margin:6px 0;padding-left:18px;">');
+    html = html.replace(/<li>/g, '<li style="margin:3px 0;">');
+    html = html.replace(/<p>/g, '<p style="margin:6px 0;">');
+    html = html.replace(/<h1>/g, '<h1 style="margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:18px;">');
+    html = html.replace(/<h2>/g, '<h2 style="margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:16px;">');
+    html = html.replace(/<h3>/g, '<h3 style="margin-top:14px;margin-bottom:6px;color:#7cffc4;font-size:14px;">');
+    html = html.replace(/<h4>/g, '<h4 style="margin-top:12px;margin-bottom:4px;color:#7cffc4;font-size:13px;">');
+
+    return html || '<span class="error">无回复</span>';
+}
+async function search() {
+    const query = document.getElementById('queryInput').value.trim();
+    if (!query && uploadedImages.length===0 && uploadedFiles.length===0) return toast('请输入问题或上传文件');
+    const ids = getSelectedIds(); if (ids.length===0) return;
+
+    const resultsDiv = document.getElementById('results');
+    const cardMap = {};
+    ids.forEach(id => {
+        const name = status.probes[id]?.name || config.platforms.find(p=>p.id===id)?.name || id;
+        const card = document.createElement('div'); card.className='result-card'; card.id=`card-${id}`;
+        card.innerHTML = `<div class="platform-name">📌 ${name}</div><div class="content pending">⏳ 等待回复...</div>`;
+        resultsDiv.prepend(card); cardMap[id] = card;
+    });
+
+    let payload = {
+        action: 'ask_some',
+        platform_ids: ids,
+        query: query || '分析这个文件',
+        images: uploadedImages.map(i => i.path),
+        files: uploadedFiles.map(f => f.path),
+        stream: true
+    };
+
+    try {
+        const res = await fetch(API, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, {stream: true});
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (let line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        if (data.pid && data.data) {
+                            const card = cardMap[data.pid];
+                            if (card) {
+                                card.innerHTML = `<div class="platform-name">📌 ${data.data.name||data.pid}</div><div class="content">${renderReply(data.data.reply||'', data.data.media_urls||[])}</div>`;
+                            }
+                        }
+                        if (data.done) return;
+                    } catch(e) {}
+                }
+            }
+        }
+    } catch(e) {
+        Object.values(cardMap).forEach(card => card.innerHTML = card.innerHTML.replace('⏳ 等待回复...', '<span class="error">❌ 失败</span>'));
+    }
+    uploadedImages=[]; uploadedFiles=[]; document.getElementById('imagePreview').innerHTML=''; document.getElementById('queryInput').value='';
+    imageIndex = 0;
+}
+
+async function handleImages() {
+    const files = document.getElementById('imageInput').files;
+    for (let file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const res = await fetch(UPLOAD_URL, {method:'POST', body: fd});
+            const data = await res.json();
+            if (data.file_path) {
+                const idx = imageIndex++;
+                uploadedImages.push({name: file.name, path: data.file_path, index: idx});
+                const item = document.createElement('span');
+                item.className = 'preview-item';
+                item.dataset.index = idx;
+                item.innerHTML = `<img src="${URL.createObjectURL(file)}"><span class="remove" onclick="removeImage(${idx}, this.parentElement)">×</span>`;
+                document.getElementById('imagePreview').appendChild(item);
+            } else {
+                toast('上传失败: ' + file.name);
+            }
+        } catch(e) {
+            toast('上传失败: ' + file.name);
+        }
+    }
+    if (uploadedImages.length > 0) {
+        document.getElementById('queryInput').placeholder = '描述这张图片...';
+    }
+}
+
+async function handleFiles() {
+    const file = document.getElementById('fileInput').files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const res = await fetch(UPLOAD_URL, {method:'POST', body: fd});
+        const data = await res.json();
+        if (data.file_path) {
+            uploadedFiles.push({name: file.name, path: data.file_path});
+            document.getElementById('queryInput').placeholder = `分析：${file.name}`;
+        } else {
+            toast('上传失败');
+        }
+    } catch(e) {
+        toast('上传失败');
+    }
+}
+
+function removeImage(idx, el) {
+    if (el) el.remove();
+    uploadedImages = uploadedImages.filter(i => i.index !== idx);
+    if (uploadedImages.length === 0) {
+        document.getElementById('queryInput').placeholder = '问选中的AI...';
+    }
+}
+
+async function startCluster() {
+    document.querySelector('.btn-start').textContent = '⏳ 启动中...';
+    await fetch(API, {method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({action:'start'})});
+    toast('集群启动中...');
+    let retries = 0;
+    const check = setInterval(async () => {
+        await loadStatus();
+        if (++retries > 30 || Object.values(status.probes || {}).every(p => p.status === 'ready')) {
+            clearInterval(check);
+            document.querySelector('.btn-start').textContent = '▶ 启动';
+            toast(Object.values(status.probes || {}).every(p => p.status === 'ready') ? '✅ 所有平台就绪' : '⚠️ 部分平台未就绪');
+        }
+    }, 2000);
+}
+
+async function stopCluster() {
+    await fetch(API, {method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'})});
+    selectedPlatforms.clear();
+    loadStatus();
+    toast('集群已停止');
+}
+
+function clearResults() {
+    document.getElementById('results').innerHTML = '';
+    toast('已清空');
+}
+
+function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
+
+loadStatus();
+setInterval(loadStatus, 10000);
+</script>
+</body>
+</html>

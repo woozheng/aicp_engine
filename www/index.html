@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AICP Engine · 控制台</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,'SF Pro Display','Helvetica Neue',sans-serif;background:#f5f7fb;color:#1e293b;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+        
+        .topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;background:#1e293b;border-bottom:1px solid #334155;flex-shrink:0;height:48px}
+        .topbar .logo{font-size:16px;font-weight:600;color:#fff;letter-spacing:0.5px;display:flex;align-items:center;gap:10px}
+        .topbar .logo span{color:#2dd4bf}
+        .topbar .actions{display:flex;gap:6px;align-items:center}
+        .topbar .actions button{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#cbd5e1;padding:4px 12px;font-size:11px;cursor:pointer;transition:0.15s;font-family:inherit}
+        .topbar .actions button:hover{background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.2)}
+        .topbar .actions .badge{background:#2dd4bf20;color:#2dd4bf;padding:2px 8px;border-radius:4px;font-size:10px;border:1px solid #2dd4bf40}
+        
+        .main{display:flex;flex:1;overflow:hidden}
+        
+        .sidebar{width:160px;background:#fff;border-right:1px solid #e9edf2;display:flex;flex-direction:column;flex-shrink:0;padding-top:8px}
+        .sidebar .nav-group{margin-bottom:4px}
+        .sidebar .nav-group-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3b8;padding:6px 16px 4px}
+        .sidebar .nav-item{display:flex;align-items:center;gap:8px;padding:7px 16px;margin:1px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:#64748b;transition:0.1s;font-weight:500}
+        .sidebar .nav-item:hover{background:#f1f5f9;color:#1e293b}
+        .sidebar .nav-item.active{background:#eef2ff;color:#2563eb;font-weight:600}
+        .sidebar .nav-item .icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+        
+        .content{flex:1;display:flex;flex-direction:column;background:#f8fafc;overflow:hidden}
+        .content .panel { 
+    display: none; 
+    flex: 1; 
+    flex-direction: column; 
+    overflow-y: auto;   /* ← 加这行 */
+    padding: 16px 20px; 
+}
+        .content .panel.active{display:flex}
+        
+        .chat-layout{display:flex;flex:1;gap:12px;overflow:hidden;min-height:0}
+        .chat-main{flex:1;display:flex;flex-direction:column;background:#fff;border-radius:12px;border:1px solid #e9edf2;overflow:hidden}
+        .chat-main .messages{flex:1;overflow-y:auto;padding:16px 20px}
+        .chat-main .messages .msg{margin-bottom:12px;max-width:85%}
+        .chat-main .messages .msg.user{display:flex;justify-content:flex-end}
+        .chat-main .messages .msg.user .bubble{background:#2563eb;color:#fff;border-radius:16px 16px 4px 16px;padding:8px 14px;font-size:13px;line-height:1.5}
+        .chat-main .messages .msg.assistant .bubble{background:#f1f5f9;color:#1e293b;border-radius:16px 16px 16px 4px;padding:8px 14px;font-size:13px;line-height:1.5}
+        .chat-main .messages .msg .time{font-size:10px;color:#94a3b8;margin-top:3px;padding:0 4px}
+        .chat-main .messages .msg.user .time{text-align:right}
+        .chat-main .input-row{display:flex;gap:8px;padding:10px 16px;border-top:1px solid #e9edf2;background:#fafbfc;flex-shrink:0;align-items:flex-end}
+        .chat-main .input-row textarea{flex:1;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;resize:none;outline:none;transition:0.15s;min-height:36px;max-height:120px;line-height:1.4}
+        .chat-main .input-row textarea:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,0.1)}
+        .chat-main .input-row button{background:#2563eb;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-weight:500;transition:0.15s;height:36px;white-space:nowrap;font-family:inherit}
+        .chat-main .input-row button:hover{background:#1d4ed8}
+        .chat-main .input-row button:disabled{opacity:0.5;cursor:not-allowed}
+        .chat-main .input-row .file-btn{background:transparent;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;height:36px;display:flex;align-items:center;justify-content:center;transition:0.15s;color:#64748b}
+        .chat-main .input-row .file-btn:hover{background:#f1f5f9;border-color:#cbd5e1}
+
+        .chat-side{width:340px;background:#fff;border-radius:12px;border:1px solid #e9edf2;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+        .chat-side .side-header{font-size:12px;font-weight:600;color:#64748b;padding:10px 16px;border-bottom:1px solid #e9edf2;flex-shrink:0}
+        .chat-side .side-body{flex:1;overflow-y:auto;padding:10px 16px;font-size:12px;color:#475569;line-height:1.6}
+        .chat-side .side-body .entry{padding:6px 0;border-bottom:1px solid #f1f5f9}
+        .chat-side .side-body .entry .label{color:#94a3b8;font-size:10px}
+        .chat-side .side-body .entry .value{color:#1e293b;font-weight:500}
+        
+        .schedule-layout{display:flex;flex:1;gap:12px;overflow:hidden;min-height:0}
+        .schedule-list{flex:1;background:#fff;border-radius:12px;border:1px solid #e9edf2;overflow:hidden;display:flex;flex-direction:column}
+        .schedule-list .list-header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #e9edf2;flex-shrink:0}
+        .schedule-list .list-header h4{font-size:13px;font-weight:600;color:#1e293b}
+        .schedule-list .list-header button{background:#eef2ff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;color:#2563eb;font-weight:500;font-family:inherit}
+        .schedule-list .list-header button:hover{background:#dbeafe}
+        .schedule-list .list-body{flex:1;overflow-y:auto;padding:8px 16px}
+        .schedule-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}
+        .schedule-item .info{font-size:12px}
+        .schedule-item .info .name{font-weight:500}
+        .schedule-item .info .cron{color:#94a3b8;font-size:11px;font-family:monospace}
+        .schedule-item .info .status{font-size:10px;padding:1px 8px;border-radius:10px;background:#dcfce7;color:#16a34a}
+        .schedule-item .actions button{background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:12px;padding:2px 6px}
+        .schedule-item .actions button:hover{color:#ef4444}
+        .schedule-detail{width:280px;background:#fff;border-radius:12px;border:1px solid #e9edf2;overflow:hidden;display:flex;flex-direction:column;flex-shrink:0}
+        .schedule-detail .detail-header{font-size:12px;font-weight:600;color:#64748b;padding:10px 16px;border-bottom:1px solid #e9edf2;flex-shrink:0}
+        .schedule-detail .detail-body{flex:1;overflow-y:auto;padding:12px 16px;font-size:12px;color:#475569;line-height:1.6}
+        
+        .email-form{max-width:600px;background:#fff;border-radius:12px;border:1px solid #e9edf2;padding:20px 24px;display:flex;flex-direction:column;gap:12px;margin:0 auto;width:100%;align-self:flex-start}
+        .email-form .row{display:flex;gap:12px;flex-wrap:wrap}
+        .email-form .row .field{flex:1;min-width:140px}
+        .email-form .row .field label{display:block;font-size:11px;font-weight:500;color:#64748b;margin-bottom:3px}
+        .email-form .row .field input{width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:inherit;outline:none;background:#fafbfc;transition:0.15s}
+        .email-form .row .field input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,0.1);background:#fff}
+        .email-form .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+        .email-form .actions button{padding:6px 16px;border-radius:6px;border:none;font-size:12px;cursor:pointer;font-weight:500;font-family:inherit;transition:0.15s}
+        .email-form .actions .btn-primary{background:#2563eb;color:#fff}
+        .email-form .actions .btn-primary:hover{background:#1d4ed8}
+        .email-form .actions .btn-success{background:#10b981;color:#fff}
+        .email-form .actions .btn-success:hover{background:#059669}
+        .email-form .actions .btn-ghost{background:#f1f5f9;color:#64748b}
+        .email-form .actions .btn-ghost:hover{background:#e2e8f0}
+        .email-form .status{font-size:12px;color:#64748b;padding:4px 0}
+        
+        .app-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding:4px 0}
+        .app-card{background:#fff;border:1px solid #e9edf2;border-radius:12px;padding:16px 12px;text-align:center;cursor:pointer;transition:0.15s}
+        .app-card:hover{border-color:#2563eb;box-shadow:0 1px 4px rgba(0,0,0,0.06);transform:translateY(-1px)}
+        .app-card .icon{font-size:32px;display:block;margin-bottom:6px}
+        .app-card .name{font-size:13px;font-weight:500;color:#1e293b}
+        .app-card .desc{font-size:10px;color:#94a3b8;margin-top:2px}
+        
+        .footer-bar{display:flex;align-items:center;gap:16px;padding:6px 20px;background:#fff;border-top:1px solid #e9edf2;flex-shrink:0;height:36px;font-size:11px;color:#64748b}
+        .footer-bar .sep{color:#e2e8f0}
+        .footer-bar .spacer{flex:1}
+        .footer-bar .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px}
+        .footer-bar .dot.green{background:#10b981}
+        .footer-bar .dot.red{background:#ef4444}
+        
+        .empty-state{color:#94a3b8;font-size:12px;text-align:center;padding:40px 0}
+        .loading{color:#94a3b8;font-size:12px;text-align:center;padding:20px 0}
+        .toast{position:fixed;bottom:60px;right:24px;background:#1e293b;color:#fff;padding:6px 16px;border-radius:40px;font-size:12px;z-index:2000;opacity:1;transition:opacity 0.3s}
+        .toast.hide{opacity:0;visibility:hidden}
+        
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:4px}
+        ::-webkit-scrollbar-thumb:hover{background:#cbd5e1}
+        
+        @media(max-width:768px){
+            .sidebar{width:56px}
+            .sidebar .nav-item span{display:none}
+            .sidebar .nav-group-label{display:none}
+            .sidebar .nav-item{justify-content:center;padding:10px 0;margin:2px 4px}
+            .sidebar .nav-item .icon{font-size:18px;width:auto}
+            .chat-side{width:0;display:none}
+            .schedule-detail{width:0;display:none}
+            .email-form{padding:12px}
+        }
+
+/*/* ============================================================
+   任务 Panel
+   ============================================================ */
+.tasks-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e9edf2;
+    overflow: hidden;
+    min-width: 0;
+    width: 100%;
+}
+
+.tasks-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid #e9edf2;
+    flex-shrink: 0;
+    background: #fafbfc;
+}
+
+.tasks-header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.tasks-header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.tasks-header-actions button {
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    color: #64748b;
+    transition: 0.15s;
+    font-family: inherit;
+}
+
+.tasks-header-actions button:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.tasks-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 16px;
+    min-width: 0;
+    width: 100%;
+}
+
+/* 任务卡片 */
+.task-card {
+    width: 100%;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+.task-card .task-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+    /* 核心：移除 space-between，不再两端拉开巨大空白 */
+}
+
+.task-card .task-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.task-card .task-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1e293b;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    display: block;
+    line-height: 1.4;
+    margin-bottom: 2px;
+}
+
+.task-card .task-id {
+    font-size: 10px;
+    color: #94a3b8;
+    font-family: monospace;
+    word-break: break-all;
+    display: block;
+}
+
+.task-card .task-meta {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.task-card .task-meta .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.task-card .task-meta .status-dot.done { background: #10b981; }
+.task-card .task-meta .status-dot.failed { background: #ef4444; }
+.task-card .task-meta .status-dot.processing { background: #f59e0b; animation: pulse 1s infinite; }
+.task-card .task-meta .status-dot.idle { background: #94a3b8; }
+
+.task-card .task-output {
+    font-size: 10px;
+    margin-top: 4px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.task-card .task-output a {
+    color: #2563eb;
+    text-decoration: none;
+    background: #eef2ff;
+    padding: 0 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    display: inline-block;
+    word-break: break-all;
+    white-space: normal;
+    max-width: 100%;
+}
+
+.task-card .task-output a:hover {
+    background: #bfdbfe;
+    text-decoration: underline;
+}
+
+/* 按钮区 */
+.task-card .task-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.task-card .task-actions button {
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 9px;
+    cursor: pointer;
+    color: #64748b;
+    transition: 0.15s;
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.task-card .task-actions button:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.task-card .task-actions .btn-run { 
+    color: #2563eb; 
+    border-color: #bfdbfe; 
+    background: #eff6ff;
+}
+.task-card .task-actions .btn-run:hover { background: #dbeafe; }
+
+.task-card .task-actions .btn-schedule { 
+    color: #8b5cf6; 
+    border-color: #ddd6fe; 
+    background: #f5f3ff;
+}
+.task-card .task-actions .btn-schedule:hover { background: #ede9fe; }
+
+.task-card .task-actions .btn-delete { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2;
+}
+.task-card .task-actions .btn-delete:hover { background: #fee2e2; }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="logo">🧠 <span>AICP</span> Engine</div>
+    <div class="actions">
+        <span class="badge">v5.3</span>
+        <button onclick="logout()">退出</button>
+    </div>
+</div>
+
+<div class="main">
+    <div class="sidebar" id="sidebar">
+        <div class="nav-group">
+            <div class="nav-group-label">控制台</div>
+            <div class="nav-item active" data-panel="chat" onclick="switchPanel('chat')">
+                <span class="icon">💬</span><span>对话</span>
+            </div>
+            <div class="nav-item" data-panel="tasks" onclick="switchPanel('tasks')">
+                <span class="icon">📋</span><span>任务</span>
+            </div>
+            <div class="nav-item" data-panel="schedule" onclick="switchPanel('schedule')">
+                <span class="icon">⏰</span><span>调度</span>
+            </div>
+            <div class="nav-item" data-panel="email" onclick="switchPanel('email')">
+                <span class="icon">📧</span><span>邮箱</span>
+            </div>
+        </div>
+        <div class="nav-group" style="margin-top:8px">
+            <div class="nav-group-label">应用</div>
+            <div class="nav-item" data-panel="apps" onclick="switchPanel('apps')">
+                <span class="icon">📦</span><span>应用</span>
+            </div>
+        </div>
+        <div style="flex:1"></div>
+    </div>
+
+    <div class="content">
+        
+        <!-- 对话 -->
+        <div class="panel active" id="panel-chat">
+            <div class="chat-layout">
+                <div class="chat-main">
+                    <div class="messages" id="chatMessages">
+                        <div class="msg assistant"><div class="bubble">你好，我是 AICP 主控系统。请描述你的需求。</div><div class="time">系统</div></div>
+                    </div>
+                    <div class="input-row" style="flex-wrap:wrap;gap:4px;">
+                        <button class="file-btn" onclick="document.getElementById('fileInput').click()" title="上传文件">📎</button>
+                        <input type="file" id="fileInput" style="display:none" multiple onchange="handleFiles(this.files)">
+                        <div id="filePreview" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0;width:100%;order:10;"></div>
+                        <textarea id="msgInput" rows="1" placeholder="输入需求..." ...></textarea>
+                        <button id="sendBtn" onclick="sendMessage()">发送</button>
+                    </div>
+                </div>
+                <div class="chat-side">
+                    <div class="side-header">📋 当前任务</div>
+                    <div class="side-body" id="taskSidebar">
+                        <div class="entry"><span class="label">状态</span><div class="value" id="taskStatus">空闲</div></div>
+                        <div class="entry"><span class="label">任务</span><div class="value" id="taskName">—</div></div>
+                        <div class="entry"><span class="label">产出</span><div class="value" id="taskOutput">—</div></div>
+                        <div style="margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9">
+                            <div style="font-size:10px;color:#94a3b8;margin-bottom:4px">最近</div>
+                            <div id="recentHistory" style="font-size:11px;color:#64748b">暂无</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+<!-- ============================================================ -->
+<!-- 任务 Panel -->
+<!-- ============================================================ -->
+<div class="panel" id="panel-tasks">
+    <div class="tasks-layout">
+        <div class="tasks-header">
+            <h3>📋 任务列表</h3>
+            <div class="tasks-header-actions">
+                <span id="taskCount" style="font-size:12px;color:#94a3b8">0 个任务</span>
+                <button onclick="refreshTaskList()" title="刷新">🔄 刷新</button>
+                <button onclick="clearAllTasks()" title="清空所有任务" style="color:#ef4444">🗑 清空</button>
+            </div>
+        </div>
+        <div class="tasks-body" id="taskListBody">
+            <div class="empty-state">暂无任务<br><span style="font-size:10px;color:#cbd5e1">创建任务后会自动出现</span></div>
+        </div>
+    </div>
+</div>
+        <!-- 调度 -->
+        <div class="panel" id="panel-schedule">
+            <div class="schedule-layout">
+                <div class="schedule-list">
+                    <div class="list-header">
+                        <h4>⏰ 定时任务</h4>
+                        <button onclick="showAddSchedule()">+ 添加</button>
+                    </div>
+                    <div class="list-body" id="scheduleListBody">
+                        <div class="empty-state">暂无定时任务</div>
+                    </div>
+                </div>
+                <div class="schedule-detail">
+                    <div class="detail-header">📁 产出</div>
+                    <div class="detail-body" id="scheduleDetailBody">
+                        <div class="empty-state">选择任务查看产出</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 邮箱 -->
+        <div class="panel" id="panel-email">
+            <div class="email-form" id="emailForm">
+                <div class="row">
+             <div class="row">
+    <div class="field">
+        <label>启用邮箱</label>
+        <input type="checkbox" id="emailEnabled" checked>
+    </div>
+    <div class="field">
+        <label>检查间隔(秒)</label>
+        <input id="emailInterval" type="number" value="60">
+    </div>
+</div>
+                </div>
+                <div class="row">
+                    <div class="field"><label>IMAP 服务器</label><input id="emailImap" placeholder="imap.qq.com"></div>
+                    <div class="field"><label>IMAP 端口</label><input id="emailImapPort" type="number" value="993"></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label>SMTP 服务器</label><input id="emailSmtp" placeholder="smtp.qq.com"></div>
+                    <div class="field"><label>SMTP 端口</label><input id="emailSmtpPort" type="number" value="465"></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label>账号</label><input id="emailUser" placeholder="your@email.com"></div>
+                    <div class="field"><label>授权码</label><input id="emailPass" type="password" placeholder="授权码"></div>
+                </div>
+                <div class="actions">
+                    <button class="btn-primary" onclick="saveEmail()">💾 保存</button>
+                    <button class="btn-success" onclick="testEmail()">📧 测试</button>
+                    <button class="btn-ghost" onclick="checkEmail()">📬 收信</button>
+                    <span class="status" id="emailStatus">就绪</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 应用 -->
+        <div class="panel" id="panel-apps">
+            <div class="app-grid" id="appGrid">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="footer-bar">
+    <span id="sessionDisplay">会话: default</span>
+    <span class="sep">|</span>
+    <span id="sourceDisplay">本地</span>
+    <span class="sep">|</span>
+    <span id="versionDisplay">v5.3</span>
+    <span class="spacer"></span>
+    <span id="wsStatus"><span class="dot green"></span>已连接</span>
+</div>
+
+<script>
+    // ============================================================
+    // 1. 基础配置
+    // ============================================================
+    const API_BASE = '/api/builtins/agents/main_agent';
+
+    // session_id: cookie 里的 token，没有就是 default
+    function getSessionId() {
+        const match = document.cookie.match(/aicp_token=([^;]+)/);
+        return match ? match[1] : 'default';
+    }
+
+    // source: 本地还是远程
+    function getSource() {
+        const host = window.location.hostname;
+        return (host === 'localhost' || host === '127.0.0.1') ? 'local' : 'remote';
+    }
+
+    const sessionId = getSessionId();
+    const source = getSource();
+
+    document.getElementById('sessionDisplay').textContent = '会话: ' + sessionId;
+    document.getElementById('sourceDisplay').textContent = source === 'local' ? '本地' : '远程';
+
+    // ============================================================
+    // 2. 工具
+    // ============================================================
+    function showToast(msg) {
+        let t = document.querySelector('.toast');
+        if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+        t.textContent = msg;
+        t.classList.remove('hide');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.add('hide'), 3000);
+    }
+
+    function escapeHtml(text) {
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
+
+    // ============================================================
+    // 3. WebSocket
+    // ============================================================
+    let ws = null;
+    let wsChannel = 'ws_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+    // 只改这一个函数
+    function connectWS() {
+    const sessionId = getSessionId();
+    const wsChannel = 'pa_' + sessionId;  // 🔥 加 pa_ 前缀
+    
+    fetch('/api/ws_config')
+        .then(r => r.json())
+        .then(data => {
+            const url = data.url || `ws://${location.hostname}:${parseInt(location.port || 9000) + 1}/ws`;
+            ws = new WebSocket(`${url}?channel=${wsChannel}`);
+            
+            ws.onopen = () => {
+                document.getElementById('wsStatus').innerHTML = '<span class="dot green"></span>已连接';
+            };
+            ws.onmessage = (e) => {
+    try {
+        const msg = JSON.parse(e.data);
+        // 🔥 兼容直接推送和包装格式
+        const data = msg.data || msg;
+        const type = data.type || msg.type;
+        
+        if (type === 'done' || type === 'step_done') {
+            // 处理完成
+            document.getElementById('taskStatus').textContent = '✅ 完成';
+            
+            // 🔥 更新任务名称
+            const taskId = data.result?.task_id || data.task_id || '';
+            if (taskId) {
+                document.getElementById('taskName').textContent = taskId;
+            }
+            
+            // 🔥 显示产物文件
+            if (data.files && data.files.length) {
+                const filesHtml = data.files.map(f => {
+                    // 直接用 f.path，后端推过来就是完整路径
+                    const filePath = f.path || `/data/agents/tasks/${taskId}/output/${f.name}`;
+                    return `<a href="${filePath}" target="_blank" style="color:#2563eb;text-decoration:none">📥 ${f.name}</a>`;
+                }).join(' ');
+                document.getElementById('taskOutput').innerHTML = filesHtml;
+            } else {
+                // 没有文件，显示结果内容
+                const body = data.result?.body || data.body || '';
+                if (body) {
+                    document.getElementById('taskOutput').textContent = body;
+                }
+            }
+            
+            // 🔥 如果有 result.body，追加到聊天
+            if (data.result && data.result.body) {
+                addMessage('assistant', '✅ ' + data.result.body);
+            }
+            
+            // 🔥 失败处理
+            if (data.result && data.result.ok === false) {
+                const errorMsg = data.result.error || '任务失败';
+                addMessage('assistant', '❌ ' + errorMsg);
+                document.getElementById('taskStatus').textContent = '❌ 失败';
+                document.getElementById('taskOutput').textContent = '❌ ' + errorMsg;
+            }else
+            { fileList = [];
+            renderFilePreview();
+             document.getElementById('fileInput').value = '';
+            }
+            
+            // 刷新调度列表
+            loadSchedules();
+            
+        } else if (type === 'progress' || type === 'step_start') {
+            // 进度更新
+            const step = data.step || data.current || '';
+            const total = data.total || '';
+            const plugin = data.plugin || '';
+            let statusText = '⏳ ' + step;
+            if (total) {
+                statusText += ` / ${total}`;
+            }
+            if (plugin) {
+                statusText += ` (${plugin})`;
+            }
+            document.getElementById('taskStatus').textContent = statusText;
+            
+            // 如果有消息内容，追加到聊天
+            if (data.message) {
+                addMessage('assistant', '⏳ ' + data.message);
+            }
+            
+        } else if (type === 'step_failed') {
+            // 步骤失败
+            const plugin = data.plugin || '';
+            const error = data.error || '未知错误';
+            document.getElementById('taskStatus').textContent = '❌ 失败';
+            document.getElementById('taskOutput').textContent = `❌ ${plugin}: ${error}`;
+            addMessage('assistant', `❌ 步骤失败 (${plugin}): ${error}`);
+            
+        } else if (type === 'chat') {
+            // 聊天消息
+            addMessage('assistant', data.content || data.message || '');
+            
+        } else if (type === 'question') {
+            // 追问
+            addMessage('assistant', '❓ ' + (data.content || data.message || ''));
+            document.getElementById('taskStatus').textContent = '📝 等待补充';
+            
+        } else if (type === 'info') {
+            // 信息提示
+            addMessage('assistant', 'ℹ️ ' + (data.content || data.message || ''));
+            
+        } else if (type === 'error') {
+            // 错误
+            addMessage('assistant', '❌ ' + (data.content || data.message || data.error || '发生错误'));
+            document.getElementById('taskStatus').textContent = '❌ 错误';
+            
+        } else {
+            // 兜底：未知类型
+            console.log('未知消息类型:', type, data);
+            if (data.content || data.message || data.body) {
+                addMessage('assistant', data.content || data.message || data.body);
+            }
+        }
+        
+    } catch(err) {
+        console.log('WS解析失败:', err);
+        console.log('原始消息:', e.data);
+    }
+};
+            ws.onclose = () => {
+                document.getElementById('wsStatus').innerHTML = '<span class="dot red"></span>已断开';
+                setTimeout(connectWS, 3000);
+            };
+            ws.onerror = () => {};
+        })
+        .catch(() => {
+            setTimeout(connectWS, 3000);
+        });
+}
+    connectWS();
+
+    // ============================================================
+    // 4. 导航
+    // ============================================================
+    function switchPanel(name) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const panel = document.getElementById('panel-' + name);
+        if (panel) panel.classList.add('active');
+        const nav = document.querySelector(`.nav-item[data-panel="${name}"]`);
+        if (nav) nav.classList.add('active');
+        if (name === 'schedule') loadSchedules();
+        if (name === 'email') loadEmailConfig();
+        if (name === 'apps') loadApps();
+    }
+
+    // ============================================================
+    // 5. 对话
+    // ============================================================
+    function addMessage(role, content) {
+        const container = document.getElementById('chatMessages');
+        const div = document.createElement('div');
+        div.className = 'msg ' + role;
+        const time = new Date().toLocaleTimeString();
+        const clean = escapeHtml(content).replace(/\n/g, '<br>');
+        div.innerHTML = `<div class="bubble">${clean}</div><div class="time">${role === 'user' ? '我' : '系统'} · ${time}</div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        const el = document.getElementById('recentHistory');
+        const preview = content.length > 60 ? content.slice(0, 60) + '...' : content;
+        el.innerHTML = `<div style="padding:4px 0;border-bottom:1px solid #f1f5f9;font-size:11px">${escapeHtml(preview)}</div>` + el.innerHTML;
+        if (el.children.length > 5) el.removeChild(el.lastChild);
+    }
+
+   // ================================================================
+// 文件管理
+// ================================================================
+
+let fileList = [];
+
+// 渲染文件预览
+function renderFilePreview() {
+    const container = document.getElementById('filePreview');
+    if (!container) return;
+    if (fileList.length === 0) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'flex';
+    container.innerHTML = fileList.map((f, i) => `
+        <span style="background:#1e293b;color:#cbd5e1;padding:2px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
+            📎 ${f.name} (${(f.size/1024).toFixed(1)}KB)
+            <span onclick="removeFile(${i})" style="cursor:pointer;color:#ef4444;font-weight:bold;">✕</span>
+        </span>
+    `).join('');
+}
+
+// 处理文件上传（选择文件后）
+function handleFiles(files) {
+    for (const f of files) {
+        fileList.push(f);
+    }
+    renderFilePreview();
+    showToast(`📎 已添加 ${files.length} 个文件`);
+}
+
+// 删除单个文件（前端删除 + 后端同步）
+async function removeFile(index) {
+    const removed = fileList.splice(index, 1)[0];
+    renderFilePreview();
+    if (document.getElementById('fileInput')) {
+        document.getElementById('fileInput').value = '';
+    }
+    // 同步到后端
+    if (removed) {
+        try {
+            await fetch('/api/builtins/agents/main_agent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'remove_file',
+                    session_id: sessionId,
+                    filename: removed.name
+                })
+            });
+        } catch(e) {
+            console.error('删除文件同步失败:', e);
+        }
+    }
+}
+
+// 从后端加载会话文件列表
+async function loadSessionFiles() {
+    try {
+        const res = await fetch('/api/builtins/agents/main_agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'get_session',
+                session_id: sessionId
+            })
+        });
+        const data = await res.json();
+        if (data.ok && data.files) {
+            // 后端存的是 {name, content, type, size}，前端需要的是 File 对象
+            // 但前端只需要显示文件名和大小，content 只在发送时用
+            fileList = data.files.map(f => ({
+                name: f.name,
+                size: f.size,
+                type: f.type || 'application/octet-stream',
+                content: f.content || '',
+                _fromServer: true
+            }));
+            renderFilePreview();
+        }
+    } catch(e) {
+        console.error('加载会话文件失败:', e);
+    }
+}
+
+// ================================================================
+// 发送消息（含文件）
+// ================================================================
+
+async function sendMessage() {
+    const input = document.getElementById('msgInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage('user', text);
+    input.value = '';
+    document.getElementById('sendBtn').disabled = true;
+    document.getElementById('taskStatus').textContent = '⏳ 处理中';
+
+    try {
+        const payload = {
+            content: text,
+            session_id: sessionId,
+            source: source
+        };
+
+        // 如果有文件（包括从服务器恢复的），转 base64 发送
+        if (fileList.length) {
+            const filesData = [];
+            for (const f of fileList) {
+                // 如果是从服务器恢复的，可能已经有 content（base64）
+                if (f._fromServer && f.content) {
+                    filesData.push({
+                        name: f.name,
+                        type: f.type || 'application/octet-stream',
+                        size: f.size,
+                        content: f.content
+                    });
+                } else if (f instanceof File) {
+                    const reader = new FileReader();
+                    const base64 = await new Promise((resolve) => {
+                        reader.onload = () => resolve(reader.result.split(',')[1]);
+                        reader.readAsDataURL(f);
+                    });
+                    filesData.push({
+                        name: f.name,
+                        type: f.type,
+                        size: f.size,
+                        content: base64
+                    });
+                }
+            }
+            payload.files = filesData;
+        }
+
+        const res = await fetch('/api/builtins/agents/main_agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        // 🔥 后端返回后，刷新文件列表
+        if (data.files !== undefined) {
+            fileList = data.files.map(f => ({
+                name: f.name,
+                size: f.size,
+                type: f.type || 'application/octet-stream',
+                content: f.content || '',
+                _fromServer: true
+            }));
+            renderFilePreview();
+        }
+
+        // ============================================================
+        // 处理响应
+        // ============================================================
+        if (data.error) {
+            addMessage('assistant', '❌ ' + data.error);
+            document.getElementById('taskStatus').textContent = '❌ 失败';
+            document.getElementById('sendBtn').disabled = false;
+            return;
+        }
+
+        if (data.type === 'question') {
+            addMessage('assistant', '❓ ' + data.content);
+            document.getElementById('taskStatus').textContent = '📝 等待补充';
+        } else if (data.type === 'task') {
+            addMessage('assistant', '✅ ' + data.content);
+            if (data.task_id) {
+                document.getElementById('taskName').textContent = data.task_id;
+                document.getElementById('taskStatus').textContent = '⏳ 执行中';
+            }
+        } else if (data.type === 'done') {
+            addMessage('assistant', '✅ ' + (data.content || '任务完成'));
+            document.getElementById('taskStatus').textContent = '✅ 完成';
+            // 🔥 任务完成，清空文件列表
+            fileList = [];
+            renderFilePreview();
+            if (document.getElementById('fileInput')) {
+                document.getElementById('fileInput').value = '';
+            }
+            if (data.files && data.files.length) {
+                document.getElementById('taskOutput').innerHTML = data.files.map(f =>
+                    `<a href="${f.path}" target="_blank" style="color:#2563eb;text-decoration:none">📥 ${f.name}</a>`
+                ).join(' ');
+            }
+        } else if (data.type === 'info' || data.type === 'studio') {
+            addMessage('assistant', data.content);
+            document.getElementById('taskStatus').textContent = '📱 Studio';
+        } else if (data.type === 'chat') {
+            addMessage('assistant', data.content);
+            document.getElementById('taskStatus').textContent = '💬 闲聊';
+        } else {
+            const reply = data.content || data.reply || data.result || data.message || '已处理';
+            addMessage('assistant', reply);
+        }
+
+        if (data.document && data.document.title) {
+            document.getElementById('taskName').textContent = data.document.title;
+        }
+
+    } catch (e) {
+        addMessage('assistant', '❌ 网络错误: ' + e.message);
+        document.getElementById('taskStatus').textContent = '❌ 失败';
+    }
+
+    document.getElementById('sendBtn').disabled = false;
+}
+
+// ================================================================
+// 页面初始化
+// ================================================================
+document.getElementById('msgInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+// 页面加载时恢复文件列表
+document.addEventListener('DOMContentLoaded', function() {
+    // ... 原有代码 ...
+    loadSessionFiles();
+});
+// ============================================================
+// 任务列表
+// ============================================================
+
+let allTasks = [];
+
+async function refreshTaskList() {
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list_tasks' })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            document.getElementById('taskListBody').innerHTML = '<div class="empty-state">加载失败</div>';
+            return;
+        }
+        
+        allTasks = data.data || [];
+        renderTaskList();
+    } catch (e) {
+        document.getElementById('taskListBody').innerHTML = '<div class="empty-state">加载失败</div>';
+    }
+}
+
+function renderTaskList() {
+    const body = document.getElementById('taskListBody');
+    document.getElementById('taskCount').textContent = allTasks.length + ' 个任务';
+    
+    if (!allTasks.length) {
+        body.innerHTML = '<div class="empty-state">暂无任务<br><span style="font-size:10px;color:#cbd5e1">创建任务后会自动出现</span></div>';
+        return;
+    }
+    
+    body.innerHTML = allTasks.map(task => {
+        const taskId = task.task_id || 'unknown';
+        const title = task.title || taskId;
+        const status = task.ok === true ? 'done' : task.ok === false ? 'failed' : 'idle';
+        const statusLabel = status === 'done' ? '完成' : status === 'failed' ? '失败' : '待执行';
+        const createdAt = task.created_at ? new Date(task.created_at).toLocaleString() : '';
+        const outputFiles = task.output_files || [];
+        const hasSchedule = task.has_schedule || false;
+        
+        const outputHtml = outputFiles.length ? outputFiles.map(f => 
+            `<a href="${f.path}" target="_blank">📥 ${f.name}</a>`
+        ).join(' ') : '<span style="color:#94a3b8;font-size:11px">无产出</span>';
+        
+        return `
+            <div class="task-card" data-task-id="${taskId}">
+                <div class="task-row">
+                    <div class="task-info">
+                        <div class="task-title">
+                            ${escapeHtml(title)}
+                            <span class="task-id">${taskId}</span>
+                            ${hasSchedule ? '<span style="font-size:10px;background:#f5f3ff;color:#8b5cf6;padding:1px 8px;border-radius:4px">⏰ 定时</span>' : ''}
+                        </div>
+                        <div class="task-meta">
+                            <span class="status-dot ${status}"></span>
+                            <span>${statusLabel}</span>
+                            ${createdAt ? `<span>${createdAt}</span>` : ''}
+                            <span>📁 ${outputFiles.length} 个文件</span>
+                        </div>
+                        <div class="task-output">${outputHtml}</div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="btn-rerun" onclick="rerunTask('${taskId}')">↻ 重跑</button>
+                        <button class="btn-run" onclick="runTask('${taskId}')">▶ 执行</button>
+                        <button class="btn-schedule" onclick="scheduleTask('${taskId}')">⏰ 调度</button>
+                        <button class="btn-delete" onclick="deleteTask('${taskId}')">🗑 删除</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 切换到任务 Tab 时刷新
+function switchPanel(name) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const panel = document.getElementById('panel-' + name);
+    if (panel) panel.classList.add('active');
+    const nav = document.querySelector(`.nav-item[data-panel="${name}"]`);
+    if (nav) nav.classList.add('active');
+    
+    // 🔥 切换到任务页时刷新列表
+    if (name === 'tasks') refreshTaskList();
+    if (name === 'schedule') loadSchedules();
+    if (name === 'email') loadEmailConfig();
+    if (name === 'apps') loadApps();
+}
+
+async function rerunTask(taskId) {
+    showToast('↻ 原地重跑: ' + taskId);
+    const res = await fetch('/api/builtins/agents/_init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rerun_task', task_id: taskId, ws_channel: sessionId })
+    });
+    const data = await res.json();
+    showToast(data.ok ? '✅ 重跑完成' : '❌ ' + (data.error || ''));
+    refreshTaskList();
+}
+
+async function runTask(taskId) {
+    showToast('▶️ 正在执行: ' + taskId);
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'run_task',
+                task_id: taskId,
+                ws_channel: sessionId
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('✅ 任务已提交执行');
+            // 延迟刷新
+            setTimeout(refreshTaskList, 2000);
+        } else {
+            showToast('❌ 执行失败: ' + (data.error || ''));
+        }
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+async function scheduleTask(taskId) {
+    // 先用 LLM 解析自然语言，或者直接用 Cron
+    const cron = prompt('输入 Cron 表达式（如 0 8 * * * 表示每天8点）：\n\n或输入自然语言如 "每天上午8点"');
+    if (!cron) return;
+    
+    try {
+        // 先尝试解析自然语言
+        let cronExpr = cron;
+        if (!cron.match(/^(\S+\s+){4}\S+$/)) {
+            const parseRes = await fetch('/api/builtins/agents/_init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'parse_schedule', text: cron })
+            });
+            const parseData = await parseRes.json();
+            if (parseData.ok && parseData.cron) {
+                cronExpr = parseData.cron;
+            } else {
+                showToast('❌ 无法解析: ' + (parseData.error || ''));
+                return;
+            }
+        }
+        
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'schedule_task',
+                task_id: taskId,
+                cron: cronExpr
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('✅ 已设置定时调度: ' + cronExpr);
+            refreshTaskList();
+            loadSchedules();
+        } else {
+            showToast('❌ ' + (data.error || ''));
+        }
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+async function deleteTask(taskId) {
+    if (!confirm(`确认删除任务 ${taskId}？\n\n所有文件将被永久删除！`)) return;
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'delete_task',
+                task_id: taskId
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('🗑 已删除');
+            refreshTaskList();
+            loadSchedules();
+        } else {
+            showToast('❌ ' + (data.error || ''));
+        }
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+async function clearAllTasks() {
+    if (!confirm('⚠️ 确认删除所有任务？此操作不可恢复！')) return;
+    if (!confirm('再次确认：删除所有任务文件？')) return;
+    
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'clear_all_tasks' })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('🗑 已清空所有任务');
+            refreshTaskList();
+            loadSchedules();
+        } else {
+            showToast('❌ ' + (data.error || ''));
+        }
+    } catch (e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+
+
+// WS 收到完成消息时刷新任务列表
+// 在 ws.onmessage 的 done 分支里加：
+// refreshTaskList();
+    // ============================================================
+    // 6. 调度
+    // ============================================================
+    let currentScheduleTaskId = null;
+
+async function loadSchedules() {
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list_tasks' })
+        });
+        const data = await res.json();
+        if (!data.ok) return;
+        const items = (data.data || []).filter(t => t.has_schedule);
+        const body = document.getElementById('scheduleListBody');
+        if (!items.length) {
+            body.innerHTML = '<div class="empty-state">暂无定时任务</div>';
+            return;
+        }
+        body.innerHTML = items.map(t => {
+            const sched = t.schedule || {};
+            const statusIcon = sched.enabled !== false ? '🟢' : '⏸️';
+            const lastRun = sched.last_run ? new Date(sched.last_run).toLocaleString() : '从未执行';
+            const runCount = sched.run_count || 0;
+            
+            return `
+                <div class="schedule-item" onclick="selectSchedule('${t.task_id}')"
+                     style="cursor:pointer; padding:12px 0; border-bottom:1px solid #f1f5f9;">
+                    <div class="info" style="flex:1">
+                        <div class="name">
+                            ${statusIcon} ${escapeHtml(t.title || t.task_id)}
+                            ${sched.enabled === false ? '<span style="font-size:10px;color:#94a3b8">(已暂停)</span>' : ''}
+                        </div>
+                        <div class="cron" style="font-family:monospace;font-size:11px;color:#64748b">
+                            ⏱ ${sched.cron || '—'}
+                        </div>
+                        <div style="font-size:10px;color:#94a3b8;margin-top:2px">
+                            已执行 ${runCount} 次 · 上次: ${lastRun}
+                        </div>
+                    </div>
+                    <div class="actions" style="display:flex;gap:4px;align-items:center;flex-shrink:0">
+                        <button onclick="event.stopPropagation();editSchedule('${t.task_id}', '${(sched.cron || '').replace(/'/g, "\\'")}')" 
+                                style="border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;background:#fff;color:#2563eb">
+                            ✏️ 编辑
+                        </button>
+                        <button onclick="event.stopPropagation();toggleSchedule('${t.task_id}', ${sched.enabled !== false})"
+                                style="border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;background:#fff;color:#64748b">
+                            ${sched.enabled !== false ? '⏸️ 暂停' : '▶️ 启用'}
+                        </button>
+                        <button onclick="event.stopPropagation();deleteScheduleConfirm('${t.task_id}')"
+                                style="border:1px solid #fecaca;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;background:#fef2f2;color:#ef4444">
+                            🗑
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch(e) {}
+}
+
+
+// 编辑调度
+function editSchedule(taskId, currentCron) {
+    const cron = prompt('修改 Cron 表达式（如 0 8 * * * 表示每天8点）\n或输入自然语言如 "每天上午8点"\n\n当前: ' + currentCron, currentCron);
+    if (!cron || cron === currentCron) return;
+    
+    // 如果是自然语言，先解析
+    if (!cron.match(/^(\S+\s+){4}\S+$/)) {
+        fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'parse_schedule', text: cron })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok && data.cron) {
+                doUpdateSchedule(taskId, data.cron);
+            } else {
+                showToast('❌ 无法解析: ' + (data.error || ''));
+            }
+        });
+    } else {
+        doUpdateSchedule(taskId, cron);
+    }
+}
+
+
+async function doUpdateSchedule(taskId, cron) {
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update_schedule', task_id: taskId, cron })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('✅ 已更新: ' + cron);
+            loadSchedules();
+        } else {
+            showToast('❌ ' + (data.error || ''));
+        }
+    } catch(e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+
+// 暂停/启用调度
+async function toggleSchedule(taskId, currentlyEnabled) {
+    const action = currentlyEnabled ? '暂停' : '启用';
+    if (!confirm(`${action}此调度？`)) return;
+    
+    try {
+        if (currentlyEnabled) {
+            // 暂停 = cancel
+            await fetch('/api/builtins/agents/_init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'cancel_schedule', task_id: taskId })
+            });
+        } else {
+            // 启用 = 重新设置（需要原 cron）
+            const detailRes = await fetch('/api/builtins/agents/_init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'get_schedule_detail', task_id: taskId })
+            });
+            const detail = await detailRes.json();
+            if (detail.ok && detail.data) {
+                const sched = detail.data.schedule || {};
+                const everyMin = sched.every_minutes || 60;
+                const cron = `*/${everyMin} * * * *`;
+                await fetch('/api/builtins/agents/_init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'update_schedule', task_id: taskId, cron })
+                });
+            }
+        }
+        showToast(`✅ 已${action}`);
+        loadSchedules();
+    } catch(e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+
+// 删除调度确认
+function deleteScheduleConfirm(taskId) {
+    if (confirm('⚠️ 确认删除此调度？\n\n（任务本身不会被删除，只取消定时）')) {
+        deleteSchedule(taskId);
+    }
+}
+
+
+async function deleteSchedule(taskId) {
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete_schedule', task_id: taskId })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('🗑 调度已删除');
+            loadSchedules();
+            document.getElementById('scheduleDetailBody').innerHTML = '<div class="empty-state">选择任务查看产出</div>';
+        } else {
+            showToast('❌ ' + (data.error || ''));
+        }
+    } catch(e) {
+        showToast('❌ ' + e.message);
+    }
+}
+
+
+    async function selectSchedule(taskId) {
+    const detail = document.getElementById('scheduleDetailBody');
+    detail.innerHTML = '<div class="loading">加载中...</div>';
+
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_schedule_history', task_id: taskId })
+        });
+        const data = await res.json();
+        if (data.ok && data.history && data.history.length) {
+            let html = '';
+            data.history.forEach(snapshot => {
+                const icon = snapshot.ok ? '✅' : '❌';
+                html += `<div style="margin-bottom:12px;">
+                    <div style="font-weight:500;font-size:12px;color:#1e293b;padding:4px 0;border-bottom:1px solid #e9edf2;">
+                        ${icon} ${snapshot.time}
+                    </div>`;
+                const files = snapshot.files || [];
+                if (files.length) {
+                    files.forEach(f => {
+                        html += `<div style="padding:4px 8px;font-size:12px;display:flex;justify-content:space-between;border-bottom:1px solid #f1f5f9;">
+                            <a href="/${f.path}" target="_blank" style="color:#2563eb;text-decoration:none">📥 ${f.name}</a>
+                            <span style="color:#94a3b8;font-size:10px;">${(f.size/1024).toFixed(1)}KB</span>
+                        </div>`;
+                    });
+                } else {
+                    html += `<div style="padding:4px 8px;font-size:12px;color:#94a3b8;">（无产出）</div>`;
+                }
+                html += `</div>`;
+            });
+            detail.innerHTML = html;
+        } else {
+            detail.innerHTML = '<div class="empty-state">暂无产出</div>';
+        }
+    } catch(e) {
+        detail.innerHTML = '<div class="empty-state">加载失败</div>';
+    }
+}
+    function showAddSchedule() {
+        const cron = prompt('请输入 Cron 表达式（如 0 8 * * *）或自然语言：');
+        if (!cron) return;
+        fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'parse_schedule', text: cron })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                const taskId = prompt('输入要调度的任务 ID：');
+                if (taskId) {
+                    fetch('/api/builtins/agents/_init', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'schedule_task', task_id: taskId, cron: data.cron })
+                    })
+                    .then(() => { showToast('✅ 已设置定时'); loadSchedules(); });
+                }
+            } else {
+                showToast('❌ 解析失败: ' + (data.error || ''));
+            }
+        });
+    }
+
+    async function cancelSchedule(taskId) {
+        if (!confirm('取消定时？')) return;
+        await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'cancel_schedule', task_id: taskId })
+        });
+        showToast('✅ 已取消');
+        loadSchedules();
+    }
+
+    // ============================================================
+    // 7. 邮箱
+    // ============================================================
+    async function loadEmailConfig() {
+    try {
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_config' })
+        });
+        
+        const data = await res.json();
+        console.log('邮箱配置返回:', data); 
+        if (!data.ok) return;
+        const e = data.data?.channels?.email || {};  // 🔥 改
+        document.getElementById('emailEnabled').checked = e.enabled !== false; 
+        document.getElementById('emailInterval').value = e.check_interval || 60;
+        document.getElementById('emailImap').value = e.imap_host || '';
+        document.getElementById('emailImapPort').value = e.imap_port || 993;
+        document.getElementById('emailSmtp').value = e.smtp_host || '';
+        document.getElementById('emailSmtpPort').value = e.smtp_port || 465;
+        document.getElementById('emailUser').value = e.user || '';
+        document.getElementById('emailPass').value = e.password || '';
+    } catch(e) {}
+}
+
+async function saveEmail() {
+    const config = {
+        channels: {                          // 🔥 改
+            email: {                         // 🔥 改
+                enabled: document.getElementById('emailEnabled').checked,
+                check_interval: parseInt(document.getElementById('emailInterval').value) || 60,
+                imap_host: document.getElementById('emailImap').value.trim(),
+                imap_port: parseInt(document.getElementById('emailImapPort').value) || 993,
+                smtp_host: document.getElementById('emailSmtp').value.trim(),
+                smtp_port: parseInt(document.getElementById('emailSmtpPort').value) || 465,
+                user: document.getElementById('emailUser').value.trim(),
+                password: document.getElementById('emailPass').value
+            }
+        }
+    };
+    const res = await fetch('/api/builtins/agents/_init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_config', config })
+    });
+    const data = await res.json();
+    const el = document.getElementById('emailStatus');
+    el.textContent = data.ok ? '✅ 保存成功' : '❌ ' + (data.error || '');
+    el.style.color = data.ok ? '#16a34a' : '#ef4444';
+    setTimeout(() => { el.textContent = '就绪'; el.style.color = '#64748b'; }, 3000);
+}
+
+async function checkEmail() {
+    const el = document.getElementById('emailStatus');
+    el.textContent = '⏳ 检查中...';
+    const res = await fetch('/api/builtins/agents/_init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check_email' })  // 🔥 改
+    });
+    const data = await res.json();
+    el.textContent = data.ok ? '✅ 检查完成' : '❌ ' + (data.error || '');
+    el.style.color = data.ok ? '#16a34a' : '#ef4444';
+    if (data.ok) loadSchedules();
+    setTimeout(() => { el.textContent = '就绪'; el.style.color = '#64748b'; }, 3000);
+}
+
+    async function testEmail() {
+        const el = document.getElementById('emailStatus');
+        el.textContent = '⏳ 发送中...';
+        const res = await fetch('/api/builtins/agents/_init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'test_email' })
+        });
+        const data = await res.json();
+        el.textContent = data.ok ? '✅ 已发送' : '❌ ' + (data.error || '');
+        el.style.color = data.ok ? '#16a34a' : '#ef4444';
+        setTimeout(() => { el.textContent = '就绪'; el.style.color = '#64748b'; }, 3000);
+    }
+
+   
+
+    // ============================================================
+    // 8. 应用（原 index 逻辑）
+    // ============================================================
+    async function loadApps() {
+        try {
+            const res = await fetch('/api/pages');
+            const data = await res.json();
+            const pages = (data.pages || []).filter(p => p.path !== 'index.html' && p.path !== 'login.html');
+            const grid = document.getElementById('appGrid');
+            if (!pages.length) {
+                grid.innerHTML = '<div class="empty-state">暂无应用</div>';
+                return;
+            }
+            grid.innerHTML = pages.map(p => {
+                let displayName = p.path;
+                if (p.path.endsWith('/index.html')) {
+                    displayName = p.path.replace('/index.html', '');
+                }
+                return `<div class="app-card" onclick="window.open('${p.url}', '_blank')">
+                    <span class="icon">📦</span>
+                    <div class="name">${displayName}</div>
+                    <div class="desc">打开</div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            document.getElementById('appGrid').innerHTML = '<div class="empty-state">加载失败</div>';
+        }
+    }
+
+    // ============================================================
+    // 9. 退出
+    // ============================================================
+    function logout() {
+        document.cookie = 'aicp_token=; path=/; max-age=0';
+        window.location.href = '/login.html';
+    }
+
+    // ============================================================
+    // 10. 初始化
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSchedules();
+        loadApps();
+        // 自动调整输入框高度
+        const input = document.getElementById('msgInput');
+        input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+        loadSessionFiles();
+    });
+</script>
+</body>
+</html>
