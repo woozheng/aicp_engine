@@ -8,6 +8,7 @@
 > Humans verify results. It's not about fancy orchestration, complex workflows, or bloated frameworks.
 > A new paradigm for AI AGI. Trust AI. Define rules. The rest follows naturally.
 
+**AICP Engine is not just a platform for building applications — it is also a platform for building AI Agents.**
 ---
 
 ## Core Features
@@ -17,6 +18,14 @@
 1. **Swiss Army Knife** — [AICP CLI](https://github.com/woozheng/aicp_cli), built into the engine. No server needed. One sentence, one result.
 2. **Assault Rifle** — The main console. Conversational AI with memory, task management, scheduling, and multi-channel support (Email / Feishu / WeChat).
 3. **Howitzer** — AICP Studio. A protocol-driven AI application platform. AI generates and deploys any web application, website, or tool you can imagine.
+
+
+Built-in Vision Agent — visual auto-recognition with intent-based autonomous operation (Windows desktop).
+
+All agents and Studio development tools listed above are created on-demand by AI, driven by the AICP protocol based on human requirements.
+
+**The core characteristic of this platform is not its powerful agents, but the limits of human imagination. This is a protocol engine where AI bootstraps itself.**
+
 
 ### Studio Showcase
 
