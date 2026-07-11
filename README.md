@@ -21,6 +21,7 @@
 
 
 Built-in Vision Agent — visual auto-recognition with intent-based autonomous operation (Windows desktop).
+Built-in [aicp-eat](https://github.com/woozheng/aicp-eat)  Consume everything: Python libraries, cloaude/hermers plugins, CLI exposed as HTTP APIs. AI can curl anything. 
 
 All agents and Studio development tools listed above are created on-demand by AI, driven by the AICP protocol based on human requirements.
 

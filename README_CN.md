@@ -24,6 +24,7 @@
 
 内置  Vision Agent，视觉化自动识别加自动意图操作(windows desktop)
 以上agent以及studio开发工具，均由AI由协议驱动根据需求在平台创建。
+内置  [aicp-eat](https://github.com/woozheng/aicp-eat) 吞噬一切：Python、claude、hermers、cli。暴露为 HTTP API，AI 一切皆可 curl |
 
 **平台的核心特征不在于强大的agent，在于人类的想象力，因为这是一个协议让AI自举的平台引擎**
 
@@ -70,6 +71,7 @@ python -m runtime
 内置桌面应用，AI LLM Newbula引擎，可将页面AI转化为 web llm provider，兼容openai接口层调用
 内置网页应用，office md 五件套（乱文本转MD、项目分析转MD、文字处理、任意office文档转MD、思维导图）
 内置网页应用，Studio 开发 windows 桌面版 / 网页版
+
 
 
 ### Docker（服务器 / macOS / Linux）
