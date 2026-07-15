@@ -76,7 +76,7 @@ python -m runtime
 
 ### Docker（服务器 / macOS / Linux）
 
-From [Releases](https://github.com/woozheng/aicp_engine/releases) download `aicp-server.tar`,then
+From [Releases](https://github.com/woozheng/aicp_engine/packages) download `aicp_engine`,then
 
 
 ```bash

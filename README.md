@@ -76,7 +76,7 @@ Built-in desktop apps:
 - **Studio**: Windows desktop + web edition for AI-powered development.
 
 ### Docker (Server / macOS / Linux)
-从 [Releases](https://github.com/woozheng/aicp_engine/releases) 下载 `aicp-server.tar`,然后
+从 [Releases](https://github.com/woozheng/aicp_engine/packages) 下载 `aicp_engine.tar`,然后
 
 ```bash
 docker load -i aicp-server.tar
