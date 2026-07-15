@@ -1,61 +1,80 @@
-# AICP Plugin Protocol v5.3 — Complete Capability Reference + Development Specification
+# AICP Plugin Protocol v5.4 — Complete Capability Reference + Development Specification
 
----
-
-## ⛔ STOP — READ ONLY ⛔
-
+⛔ STOP — READ ONLY ⛔
 You are receiving the AICP protocol for the FIRST time.
 Read silently. Do NOT output any code. Do NOT generate plugins.
 Reply EXACTLY: "Protocol understood. Ready for requirements design."
-Then WAIT for the user's first requirement before writing any code.
+Then WAIT for the user's first requirement before writing 
 
----
+## PART 0: AICP Core Concepts
 
-# PART 0: AICP Core Concepts
+### Three Atomic Units
 
-## Three Atomic Units
+**Envelop** — The only data carrier
+- Structure: `{sender, receiver, intent, payload, trace_id, message_id, channel_id, ttl, meta}`
+- Plugins only read & write payload / meta
+- Assign receiver to route execution to another plugin
+- Return None to terminate execution flow
+- intent: Fill empty string "" if no intent-based routing logic
 
-- **Envelop** — The only data carrier. Structure: `{sender, receiver, intent, payload, trace_id, message_id, channel_id, ttl, meta}`
-  - Plugins may only read and write `payload` and `meta`
-  - Setting `receiver` routes to the next plugin
-  - Return `None` to terminate the flow
-- **Plugin** — Processing function. Signature: `async def execute(envelop, agent) -> Envelop | None`
-- **Agent** — Capability container. Injected by the engine. Plugins can mount new capabilities onto it.
+**Plugin** — Processing unit
+- Signature: `async def execute(envelop, agent) -> Envelop | None`
 
-## System Architecture
+**Agent** — Engine injected capability container
 
-| Port | Service | Plugin | Description |
-|------|---------|--------|-------------|
-| `port` | HTTP API + Static | `os/_gateway` | JSON API, static files, Envelop routing |
-| `port + 1` | WebSocket | `os/_websocket` | Real-time bidirectional communication |
-| `port + 2` | File Upload | `os/_file_receiver` | Multipart file upload |
+### Communication Layer Separation (NEW Critical Table)
 
-## Agent Capabilities
+| Caller | Target | Standard Calling Method | Envelop Handling Rule | Hard Ban |
+|--------|--------|-------------------------|-----------------------|----------|
+| Backend Plugin | Other Backend Plugin | agent.system.call(core.Envelop()) | Manually fill all Envelop fields completely | Do NOT call internal plugins via HTTP /api/applications/xxx |
+| Frontend HTML Page | Backend Plugin | POST /api/applications/{project}/{pluginName} | Frontend only submit business JSON payload; Gateway auto fills sender/receiver/trace_id/channel_id/ttl/meta, auto assemble full Envelop; Only return envelop.payload as HTTP response | 1. Do NOT manually construct full Envelop<br>2. Do NOT directly request raw /api/envelop entry |
+| External Third-party HTTP Client | Backend Plugin | POST /api/builtins/aicpEnvelop | Manually submit complete standard Envelop JSON | Built-in frontend pages are forbidden to use this entry |
 
-| Tool | Returns | Description |
-|------|---------|-------------|
-| `agent.llm.chat(messages)` | `str` | Call LLM |
-| `agent.llm.chat_json(messages)` | `dict` | Call LLM, return parsed JSON |
-| `agent.llm.chat_stream(messages)` | `AsyncIterator[str]` | Streaming LLM call |
-| `agent.system.show_bubble(options)` | `dict` | Show bubble notification |
-| `agent.system.show_result_card(options)` | `dict` | Show result card |
-| `agent.system.call(envelop)` | `Envelop` | Cross-plugin communication |
-| `agent.scheduler.create_timer(seconds, callback)` | `timer_id` | Create timer |
+### Gateway Auto Assembly Logic for Frontend Requests (Explicit Rule)
 
-## Base Properties
+When frontend requests POST /api/applications/{project}/{xxx}:
+- Auto set sender = "frontend"
+- Auto assemble receiver = applications/{project}/{xxx}
+- Auto generate unique trace_id / message_id
+- Auto assign channel_id = {project}_dashboard
+- Default ttl = 10, default meta = {}
+- Frontend request body JSON is fully assigned to envelop.payload
+- After plugin execution, gateway strips all Envelop fields except payload and returns to frontend
 
-| Property | Description |
-|----------|-------------|
-| `agent.config` | System config dict |
-| `agent.log` | Logger object |
-| `agent.data_dir` | Path to data directory |
-| `agent.base_url` | Base URL of engine |
+### System Architecture
 
----
+| Port | Service | Core Plugin | Description |
+|------|---------|-------------|-------------|
+| base port | HTTP API + Static Resource | os/_gateway | Business JSON API, static HTML/CSS/JS distribution, Envelop routing dispatch |
+| port + 1 | WebSocket Real-time | os/_websocket | Bidirectional real-time broadcast |
+| port + 2 | Large File Upload | os/_file_receiver | Multipart form-data upload for files over 1MB |
 
-# PART 1: Plugin Patterns
+### Agent Built-in Capabilities
 
-## Pattern 1: Standard (chat, Q&A, summarize)
+| Tool | Return Type | Function Description |
+|------|-------------|---------------------|
+| agent.llm.chat(messages) | str | Normal LLM text completion |
+| agent.llm.chat_json(messages) | dict | LLM forced return parsed JSON object |
+| agent.llm.chat_stream(messages) | AsyncIterator[str] | Streaming chunk LLM output |
+| agent.system.show_bubble(options) | dict | Pop frontend bubble notification |
+| agent.system.show_result_card(options) | dict | Pop structured result card |
+| agent.system.call(envelop) | Envelop | Cross-plugin synchronous call, return target plugin processed full Envelop |
+| agent.scheduler.create_timer(seconds, callback) | timer_id | Create delayed background timer task |
+
+### Agent Base Read-only Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| agent.config | dict | Global engine system configuration |
+| agent.log | Logger | Log output object (error/warn/info) |
+| agent.data_dir | Path | Persistent data root directory |
+| agent.base_url | str | Engine frontend base URL prefix |
+
+## PART 1: Plugin Standard Execution Patterns (Simplified, Remove Full Business Demo)
+
+Only fixed signature & core logic skeleton reserved; specific business implementation is derivable by AI without full sample code.
+
+### Pattern 1: Single LLM Chat
 
 ```python
 async def execute(envelop, agent):
@@ -63,134 +82,78 @@ async def execute(envelop, agent):
     if not llm:
         envelop.payload = {"error": "LLM not available"}
         return envelop
-
-    result = await llm.chat([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": envelop.payload.get("content", "")}
-    ])
-    envelop.payload = {"result": result.strip()}
+    # Custom message construction & llm.chat call derived by AI
     return envelop
 ```
 
-## Pattern 2: Pipeline (analyze → process)
+### Pattern 2: Multi-step Pipeline
 
 ```python
 async def execute(envelop, agent):
     llm = agent.llm
-    text = envelop.payload.get("content", "")
-
-    keywords = await llm.chat_json([
-        {"role": "system", "content": "Extract keywords. Return JSON: {keywords: [...]}"},
-        {"role": "user", "content": text}
-    ])
-
-    summary = await llm.chat_json([
-        {"role": "system", "content": "Summarize based on keywords."},
-        {"role": "user", "content": str(keywords)}
-    ])
-
-    envelop.payload = {"keywords": keywords, "summary": summary}
+    # Step1 extract, Step2 summarize, sequential llm calls derived by AI
     return envelop
 ```
 
-## Pattern 3: Parallel (multi-expert)
+### Pattern 3: Parallel Multi-expert Task
 
 ```python
 import asyncio
-
 async def execute(envelop, agent):
     llm = agent.llm
-    task = envelop.payload.get("content", "")
-
-    async def expert(i):
-        return await llm.chat([
-            {"role": "system", "content": f"You are expert {i+1}."},
-            {"role": "user", "content": task}
-        ])
-
-    results = await asyncio.gather(*[expert(i) for i in range(3)])
-    envelop.payload = {"results": results}
+    # asyncio.gather parallel tasks derived by AI
     return envelop
 ```
 
-## Pattern 4: Multi-Action (chat with history)
+### Pattern 4: Multi-action Dispatch (Chat History CRUD)
 
 ```python
 async def execute(envelop, agent):
     action = envelop.payload.get("action")
-
     if action == "send":
-        user_message = envelop.payload.get("message", "")
-        history = envelop.payload.get("history", [])
-        system_prompt = envelop.payload.get("system_prompt", "You are a helpful assistant.")
-        
-        messages = [{"role": "system", "content": system_prompt}] + history
-        messages.append({"role": "user", "content": user_message})
-
-        reply = await agent.llm.chat(messages)
-        history.append({"role": "user", "content": user_message})
-        history.append({"role": "assistant", "content": reply})
-
-        envelop.payload = {"reply": reply, "history": history}
+        # chat history append logic derived by AI
         return envelop
-
     elif action == "reset":
         envelop.payload = {"success": True, "history": []}
         return envelop
-
     envelop.payload = {"error": "Unknown action"}
     return envelop
 ```
 
-## Pattern 5: No-LLM (webhook, proxy)
+### Pattern 5: Non-LLM Proxy / Webhook
 
 ```python
 async def execute(envelop, agent):
-    data = envelop.payload.get("content", envelop.payload)
-    envelop.payload = {"received": data, "status": "ok"}
+    # Raw data forward logic derived by AI
     return envelop
 ```
 
-## Pattern 6: Multi-File (complex systems)
-
-When a system has multiple responsibilities, split into multiple files:
+### Pattern 6: Multi-file Application Routing (Entry _init.py dispatch)
 
 ```python
-# init.py — entry point
 async def execute(envelop, agent):
     action = envelop.payload.get("action")
     if action == "tick":
         envelop.receiver = f"applications/{PROJECT}/tick"
         return envelop
-    elif action == "status":
-        envelop.receiver = f"applications/{PROJECT}/status"
-        return envelop
+    return envelop
 ```
 
-## Pattern 7: Streaming
+### Pattern 7: Streaming SSE Output
 
 ```python
 async def execute(envelop, agent):
-    stream = agent.llm.chat_stream([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": envelop.payload.get("content", "")}
-    ])
-
-    async def sse_generator():
-        async for chunk in stream:
-            if chunk:
-                yield chunk
-        yield "[DONE]"
-
+    stream = agent.llm.chat_stream(...)
+    # SSE generator wrapper derived by AI
     envelop.payload = sse_generator()
     return envelop
 ```
 
-## Pattern 8: File Upload
+### Pattern 8: File Upload Processing
 
 ```python
-# Step 1: Frontend upload to /upload
-# Step 2: Pass file_path via Envelop
+# Frontend upload to port+2 /upload first
+# Backend cross-call file analyzer plugin via agent.system.call
 result = await agent.system.call(core.Envelop(
     sender=f"applications/{PROJECT}/processor",
     receiver="applications/{PROJECT}/analyzer",
@@ -198,45 +161,51 @@ result = await agent.system.call(core.Envelop(
 ))
 ```
 
----
+## PART 2: Mandatory Plugin Hard Rules
 
-# PART 2: Critical Rules
-
-## Plugin Signature
+### 2.1 Function Signature Rule
 
 ```python
-async def execute(envelop, agent) -> envelop | None
-envelop.payload is a dict — read and write state here
-
-Return None to discard the envelop
+async def execute(envelop, agent) -> Envelop | None
+# envelop.payload is mutable dict for state read/write
+# Return None to discard request without response
 ```
 
-## Import Rules
+### 2.2 Import Restriction
 
-- **NO imports of AICP modules** — never `from aicp import ...`
-- `envelop` and `agent` are injected by the engine
+Forbidden: `from aicp import *` / any internal AICP module import
 
-## LLM Usage
+envelop and agent are fully injected by engine, no manual import required
 
-- `agent.llm.chat(messages)` returns a plain str, NOT a dict
-- Always check `if not agent.llm:` before calling
+### 2.3 LLM Invoke Rule
 
-## Routing Rules
+agent.llm.chat() always returns plain string, never dict
 
-- Do NOT set `envelop.receiver` unless routing to ANOTHER plugin
-- Setting it to yourself = infinite loop
+Must add guard `if not agent.llm:` before any LLM call
 
-## Error Handling
+### 2.4 Routing Rule
 
-- Do NOT add defensive wrappers — the engine handles timeouts
-- NO `asyncio.wait_for` / manual timeout
+Do NOT assign envelop.receiver unless explicitly forwarding to another plugin
 
-## File Transfer Rules
+Self-target receiver causes infinite loop, strictly forbidden
 
-- Files >1MB: Use `os/_file_receiver` (port+2) multipart upload
-- NEVER send >5MB through gateway JSON API
+### 2.5 Timeout & Exception Clarification (Revised Ambiguous Text)
 
-## Static Content Serving
+Original ambiguous sentence revised:
+
+Engine only manages network/LLM global timeout. DO NOT write manual asyncio.wait_for timeout wrappers.
+
+All business exceptions (IO error, JSON parse failure, parameter missing) must be manually captured with try-except blocks; engine will NOT auto-handle business crash exceptions.
+
+### 2.6 File Transfer Limit
+
+Binary data over 1MB cannot be embedded inside Envelop JSON payload
+
+Use port+2 multipart upload, pass only file absolute path string in payload
+
+5MB size limit only applies to binary base64 embedded JSON
+
+### 2.7 Static Resource Response
 
 ```python
 with open(filepath, "rb") as f:
@@ -245,9 +214,35 @@ envelop.meta["content_type"] = "image/jpeg"
 return envelop
 ```
 
----
+## PART 9: Plugin Robustness Mandatory Specification (NEW Full Independent Chapter)
 
-# PART 3: _init.py Template (REQUIRED)
+All plugins must comply with below constraints, otherwise output fails checklist validation.
+
+### 9.1 Return Full Branch Guarantee
+
+Every logical branch (normal success, parameter error, IO crash, unknown action) must return an Envelop object with filled payload
+
+Forbidden: uncaught exception interrupt execution without return value (causes frontend undefined empty response)
+
+### 9.2 File & Directory Operation Standard
+
+- Multi-level directory creation mandatory syntax: `Path.mkdir(parents=True, exist_ok=True)`
+- Single exist_ok=True without parents=True is invalid
+- JSON read/write double-layer exception capture
+  - Inner layer: catch json.JSONDecodeError; auto reset empty list/object if file corrupted
+  - Global top-layer try-except wrap full execute function logic, capture all runtime errors
+- File delete syntax: `Path.unlink(missing_ok=True)` to avoid file-not-exist crash
+
+### 9.3 Input Parameter Validation
+
+All action branches must validate required payload fields first; reject invalid params and return error payload before executing IO/LLM logic to save resource consumption
+
+### 9.4 Log Standard
+
+- Runtime crash / unexpected error: `agent.log.error(str(e))` with full exception trace
+- Business warning (corrupted file, empty data): `agent.log.warning(message)`
+
+## PART 3: Mandatory _init.py Application Entry Template
 
 ```python
 import core
@@ -267,7 +262,7 @@ async def execute(envelop, agent):
             payload={
                 "action": "add_menu",
                 "app_id": PROJECT,
-                "label": "App Name",
+                "label": "Application Display Name",
                 "items": [
                     {"label": "Open Panel", "action": "open_web", "url": f"/{PROJECT}/index.html", "receiver": f"applications/{PROJECT}/_init"},
                 ],
@@ -285,265 +280,213 @@ async def execute(envelop, agent):
         return envelop
 ```
 
-**Key rules:**
+### Key Constraints
 
-- `PROJECT = Path(__file__).parent.name` — NEVER hardcode project name
-- All receivers use `f"applications/{PROJECT}/..."`
-- Menu items point to handler plugins
+- `PROJECT = Path(__file__).parent.name` — hardcoding project name string is forbidden
+- All cross-plugin receiver use formatted string `f"applications/{PROJECT}/..."`
+- Tray menu label is visible application name for end users
 
----
+## PART 3.1 Mandatory app.yaml Application Config Rule (NEW)
 
-# PART 4: Output Format
+Every application must contain root app.yaml config file; gateway skips routing registration without this file, all frontend API return 404.
 
-## Path Placeholder
+### Minimum Standard Template
 
-ALL paths use `{project}` placeholder — NEVER write your own project name.
-
-## Code Block Wrapper
-
+```text
+=== APP: plugins/applications/{project}/app.yaml ===
+name: Application Display Name
+id: {project}
+version: 1.0
+description: Business brief description
+entry: _init.py
+static_root: www/{project}
+=== END ===
 ```
-=== PLUGIN: plugins/applications/{project}/chat.py ===
-(code)
+
+## PART 4: Standard Output Format Specification
+
+### 4.1 Path Placeholder Rule
+
+All file paths use {project} placeholder; never hardcode fixed project name string.
+
+### 4.2 Unified Code Block Wrapper
+
+All code blocks wrapped inside ```text markdown fence with fixed separator tags; split multiple blocks for multi-file projects.
+
+```text
+=== PLUGIN: plugins/applications/{project}/filename.py ===
+full python code
 === END ===
 
 === HTML: www/{project}/index.html ===
-(code)
+full html code
 === END ===
 
 === APP: plugins/applications/{project}/app.yaml ===
-(yaml)
+yaml config
 === END ===
 ```
 
-| Prefix | Path |
-|--------|------|
-| PLUGIN | `plugins/applications/{project}/` |
-| HTML | `www/{project}/` |
+### Block Type Mapping
 
+| Prefix Tag | Fixed Root Path |
+|------------|-----------------|
+| PLUGIN | plugins/applications/{project}/ |
+| HTML | www/{project}/ |
+| APP | plugins/applications/{project}/ |
 
-- Blocks **MUST** use `===` markers
-- Multiple PLUGIN blocks for multi-file projects
+### 4.3 Plugin File Naming Rule
 
-## Plugin File Naming
+- Business plugin: descriptive lowercase name e.g. chat.py, role_mgr.py
+- Entry file: single underscore _init.py (MANDATORY)
+- Double underscore __init__.py is skipped by engine, strictly forbidden
 
-- Descriptive names: `chat.py`, `tick.py`, `assign.py`
-- **NEVER** `__init__.py` — it is skipped by the engine
+## PART 5: Frontend Hard Rules (MUST FOLLOW)
 
----
-
-# PART 5: Frontend Rules (MUST FOLLOW)
-
-## Core Rules
+### 5.1 Core Immutable JS Variables (Non-derivable, must hardcode exactly)
 
 ```javascript
-// 1. 项目名动态获取 - NEVER hardcode
+// 1. Dynamic project name, NO hardcode
 const project = window.location.pathname.split('/')[1];
 
-// 2. API 路径 - NEVER hardcode port or hostname
+// 2. Standard API root prefix
 const API = `/api/applications/${project}`;
 
-// 3. WebSocket 地址 - ALWAYS get from gateway
-// ⚠️ 警告：此接口为 GET，不是 POST！
-// 不要加 method、headers、body —— 加了就错！
+// 3. WebSocket config fetch — ONLY GET, no headers / body
 const { url } = await fetch('/api/ws_config').then(r => r.json());
 const ws = new WebSocket(`${url}?channel=${project}_dashboard`);
 
-// 4. 文件上传 - use relative path
+// 4. File upload relative url calculation
 const p = window.location.port;
 const uploadUrl = p ? `${window.location.protocol}//${window.location.hostname}:${+p + 2}/upload` : '/upload';
 const res = await fetch(uploadUrl, { method: 'POST', body: formData });
-
 ```
 
-## Complete Template
+### 5.2 Standard Request Wrapper Template (Mandatory Fault Tolerance)
 
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Name</title>
-    <style>
-        body { font-family: system-ui, sans-serif; background: #fff; }
-        /* No gradients, no shadows */
-    </style>
-</head>
-<body>
-    <div id="app"></div>
-    <script>
-        (function() {
-            const project = window.location.pathname.split('/')[1];
-            const API = `/api/applications/${project}`;
-            
-            // WebSocket
-            let ws = null;
-            async function connectWS() {
-                const { url } = await fetch('/api/ws_config').then(r => r.json());
-                ws = new WebSocket(`${url}?channel=${project}_dashboard`);
-                ws.onmessage = (e) => {
-                    const data = JSON.parse(e.data);
-                    if (data.type === 'status') render(data.snapshot);
-                };
-                ws.onclose = () => setTimeout(connectWS, 5000);
-            }
-            
-            // Load data
-            async function load() {
-                const res = await fetch(`${API}/scheduler`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'get_snapshot' })
-                });
-                const data = await res.json();
-                if (data.snapshot) render(data.snapshot);
-            }
-            
-            function render(snapshot) {
-                // Render using snapshot data
-            }
-            
-            load();
-            connectWS();
-        })();
-    </script>
-</body>
-</html>
+All frontend API calls must use this wrapper to avoid empty response undefined crash:
+
+```javascript
+async function request(pluginName, payload) {
+  const resp = await fetch(`${API}/${pluginName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const rawText = await resp.text();
+  if (!rawText) return {};
+  return JSON.parse(rawText);
+}
 ```
 
-## Checklist
+### 5.3 Frontend CSS Restriction
 
-- [ ] Project name from `window.location.pathname.split('/')[1]`
-- [ ] API uses `/api/applications/${project}`
-- [ ] No hardcoded ports (9000, 9001, 9002)
-- [ ] No hardcoded hostnames (localhost, 127.0.0.1)
-- [ ] WebSocket uses `/api/ws_config`  ,Get, not use Post
-- [ ] File upload uses `/upload`
-- [ ] No gradients, no shadows in CSS
+Forbidden: gradient, box-shadow decorative styles
 
----
+Layout structure, flex alignment, message bubble logic are general frontend knowledge, derivable by AI without protocol demo code
 
-# PART 6: Snapshot & Data Consistency
+### 5.4 Frontend Output Checklist Items
 
-## Single Source of Truth
+- Dynamic project name from path split
+- Standard /api/applications/${project} API prefix
+- No hardcoded port (9000/9001) / host (127.0.0.1 / localhost)
+- WS only GET /api/ws_config without extra params
+- Upload url follow port+2 rule
+- No gradient/shadow CSS
 
+## PART 6: Snapshot Single Source Of Truth
+
+### Core Principle
+
+One unified snapshot dict serves both LLM backend calculation and frontend rendering; no separated data copies.
+
+**DO**
+- Rebuild full snapshot on every business cycle
+- Share identical snapshot for AI logic & frontend WS broadcast
+- Persist snapshot once per cycle only
+- Push snapshot to frontend via WebSocket channel
+
+**DO NOT**
+- Duplicate account/trade/asset data storage in multiple locations
+- Generate different dataset for LLM and frontend separately
+- Cache cross-cycle stock/state data
+
+## PART 7: Common AI Output Mistakes (Only Architecture-level Hard Errors Reserved, Remove Business Demo Cases)
+
+❌ **Hardcode project name string**
 ```python
-def build_snapshot(account, stock_data, trades_today, analysis):
-    return {
-        "time": get_now_str(),
-        "account": {
-            "cash": account["cash"],
-            "market_value": total - cash,
-            "total": total,
-            "profit": profit
-        },
-        "holdings": account.get("holdings", {}),
-        "quotes": stock_data,
-        "today_trades": trades_today,
-        "analysis": analysis
-    }
-```
-
-### DO
-
-- Build fresh snapshot for each decision cycle
-- Use same data for AI and frontend
-- Save snapshot once per cycle
-- Push snapshot via WebSocket
-
-### DO NOT
-
-- Save account in multiple places
-- Use different data for AI and frontend
-- Cache stock_data across cycles
-
----
-
-# PART 7: Common AI Mistakes
-
-### ❌ Hardcoding project name
-
-```python
-# WRONG
-receiver = "applications/stockai/trader"
-```
-
-```python
-# CORRECT
+# Wrong
+receiver = "applications/chatbot/role_mgr"
+# Correct
 PROJECT = Path(__file__).parent.name
-receiver = f"applications/{PROJECT}/trader"
+receiver = f"applications/{PROJECT}/role_mgr"
 ```
 
-### ❌ Hardcoding WebSocket port
-
+❌ **Hardcode WS port / host**
 ```javascript
-// WRONG
-const ws = new WebSocket('ws://localhost:9001/ws');
-```
-
-```javascript
-// CORRECT
+// Wrong
+const ws = new WebSocket("ws://127.0.0.1:9001/ws");
+// Correct
 const { url } = await fetch('/api/ws_config').then(r => r.json());
 const ws = new WebSocket(`${url}?channel=${project}_dashboard`);
 ```
 
-### ❌ Hardcoding API URL
-
+❌ **Hardcode API root path**
 ```javascript
-// WRONG
-fetch('/api/applications/stockai/trader')
-```
-
-```javascript
-// CORRECT
+// Wrong
+fetch("/api/applications/chatbot/role_mgr")
+// Correct
 const project = window.location.pathname.split('/')[1];
-fetch(`/api/applications/${project}/trader`)
+fetch(`${API}/role_mgr`)
 ```
 
-### ❌ Encoding large files in JSON
-
+❌ **Embed large binary base64 inside JSON payload**
 ```python
-# WRONG
-envelop.payload = {"video_base64": base64_string}
+# Wrong
+envelop.payload = {"file_base64": huge_encoded_string}
+# Correct
+envelop.payload = {"file_path": "/data/xxx.file"}
 ```
 
+❌ **Split snapshot data for AI & frontend separately**
 ```python
-# CORRECT
-envelop.payload = {"video_path": "/path/to/file"}
+# Wrong
+ai_data = build_ai_snapshot()
+fe_data = build_frontend_snapshot()
+# Correct
+snapshot = build_unified_snapshot()
 ```
 
-### ❌ Using different data for AI and frontend
+## PART 8: Final Pre-output Full Checklist
 
-```python
-# WRONG
-snapshot_for_ai = get_snapshot()
-snapshot_for_frontend = get_different_snapshot()
-```
+Tick all items before delivering any code/file output
 
-```python
-# CORRECT
-snapshot = build_snapshot(account, stock_data, trades, analysis)
-# Use same snapshot for both
-```
+### Backend Plugin Check
+- Root application _init.py exists with tray menu registration logic
+- Use PROJECT = Path(__file__).parent.name, no hardcode project name
+- Zero internal aicp module import statements
+- LLM guard `if not agent.llm:` added before every llm invoke
+- No self-target envelop.receiver infinite loop routing
+- No manual asyncio.wait_for timeout wrapper
+- Full top-layer try-except global exception capture for execute()
+- Directory creation uses mkdir(parents=True, exist_ok=True)
+- JSON read/write catch JSONDecodeError, auto reset corrupted file
+- Every code branch returns filled payload Envelop object
+- Root app directory contains valid app.yaml config file
+- All file paths use {project} placeholder in output block tags
+- Output wrapped with standard === TYPE: PATH === / === END === text fence
 
----
+### Frontend HTML Check
+- Dynamic project name extracted from window.location.pathname.split('/')[1]
+- API variable fixed as /api/applications/${project}
+- WS only fetch via GET /api/ws_config, no custom headers/body
+- No hardcoded IP, port, hostname strings
+- Use standard fault-tolerant request() wrapper for all API POST calls
+- CSS contains no gradient / shadow decorative styles
 
-# PART 8: Checklist (Before Output)
-
-- [ ] `_init.py` created with menu registration
-- [ ] Uses `PROJECT = Path(__file__).parent.name`
-- [ ] No `from aicp import ...`
-- [ ] Checked `if not agent.llm:` before calling
-- [ ] `agent.llm.chat()` returns str, NOT dict
-- [ ] No `envelop.receiver = self`
-- [ ] No `asyncio.wait_for` / manual timeout
-- [ ] ALL paths use `{project}` placeholder
-- [ ] Output: `=== PLUGIN/HTML/APP: path ===` ... `=== END ===`
-- [ ] Frontend: project from `window.location.pathname.split('/')[1]`
-- [ ] Frontend: API uses `/api/applications/${project}`
-- [ ] Frontend: WebSocket uses `/api/ws_config`
-- [ ] Frontend: No hardcoded ports or hostnames
-- [ ] Frontend: No gradients, no shadows
-- [ ] Snapshot used as single source of truth
+### Data Consistency Check
+- Single unified snapshot shared for backend logic and frontend broadcast
+- No duplicate independent state datasets stored
 
 [DONE]
+
