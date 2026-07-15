@@ -13,8 +13,10 @@ from logging.handlers import RotatingFileHandler
 from core import Envelop, Agent, route
 from runtime._config import load_config
 from runtime._loader import load_all_plugins, start_hot_reload_watcher
-from runtime._system import System
 from runtime._aicp_llm import AICP_LLM
+
+SERVER_MODE = "--server" in sys.argv
+NO_GUI = "--no-gui" in sys.argv or SERVER_MODE
 
 
 def setup_logging():
@@ -47,7 +49,6 @@ def setup_logging():
 
 
 def _load_app_config(app_dir: Path) -> dict | None:
-    """加载 app.yaml，不存在也能正常启动"""
     app_yaml = app_dir / "app.yaml"
     if not app_yaml.exists():
         return {"name": app_dir.name, "auto_start": True, "init_action": "init"}
@@ -72,9 +73,13 @@ async def main():
 
     logger.info("=" * 50)
     logger.info(f"  AICP Engine · http://{host}:{port}")
+    if SERVER_MODE:
+        logger.info("  Mode: Server (no GUI)")
     logger.info("=" * 50)
-    from runtime.wx_utils import init as init_wx
-    init_wx()
+
+    if not SERVER_MODE:
+        from runtime.wx_utils import init as init_wx
+        init_wx()
 
     # LLM
     llm = None
@@ -84,13 +89,11 @@ async def main():
             from runtime._llm import LLM
             llm = LLM(config)
             logger.info(f"LLM: {llm.default_model}")
-            
             aicp_llm = AICP_LLM(config, is_remote=True)
             logger.info("AICP_LLM: chatEnvelop ready")
         except Exception as e:
             logger.warning(f"LLM init failed: {e}")
 
-    # 退出事件
     stop_event = asyncio.Event()
 
     def shutdown():
@@ -98,9 +101,15 @@ async def main():
             logger.info("Shutting down...")
             stop_event.set()
 
-    # System 能力聚合器
     loop = asyncio.get_event_loop()
-    system = System(loop, route, on_shutdown=shutdown)
+
+    # System
+    if SERVER_MODE:
+        from runtime._system import SystemServer
+        system = SystemServer(loop, route)
+    else:
+        from runtime._system import System
+        system = System(loop, route, on_shutdown=shutdown)
 
     # Agent
     agent = Agent()
@@ -115,17 +124,15 @@ async def main():
     agent.system = system
     system.bind(agent)
 
-    # 加载所有插件
     import core
     count = load_all_plugins()
     logger.info(f"Plugins: {count} loaded")
     for name in sorted(core.plugins.keys()):
         logger.debug(f"  /api/{name}")
 
-    # 启动热重载监控
     asyncio.create_task(start_hot_reload_watcher())
 
-    # ── 启动 HTTP 入口 ──
+    # HTTP
     gateway = core.plugins.get("os/_gateway")
     if not gateway:
         logger.error("os/_gateway not found!")
@@ -150,7 +157,7 @@ async def main():
         logger.error(f"Gateway start failed: {e}")
         return
 
-    # ── 启动 WebSocket ──
+    # WebSocket
     ws_port = port + 1
     ws_runner = None
     try:
@@ -160,7 +167,7 @@ async def main():
     except Exception as e:
         logger.warning(f"WebSocket start failed: {e}")
 
-    # ── 启动文件接收服务 ──
+    # FileReceiver
     file_port = port + 2
     file_runner = None
     try:
@@ -170,7 +177,7 @@ async def main():
     except Exception as e:
         logger.warning(f"FileReceiver start failed: {e}")
 
-    # 启动所有带 _init.py 的应用
+    # Applications
     logger.info("Starting applications...")
     for scan_dir in ["plugins/builtins", "plugins/applications"]:
         apps_dir = Path(scan_dir)
@@ -180,6 +187,8 @@ async def main():
             if not app_dir.is_dir():
                 continue
             if app_dir.name.startswith(".") or app_dir.name.startswith("_"):
+                continue
+            if SERVER_MODE and app_dir.name in ("mk", "studio", "shell", "screen_probe", "newbula_plus"):
                 continue
 
             init_file = app_dir / "_init.py"
@@ -208,7 +217,7 @@ async def main():
                 logger.warning(f"  ❌ {app_config.get('name', app_dir.name)}: {e}")
 
     # GUI
-    if "--no-gui" not in sys.argv:
+    if not NO_GUI:
         system.start_gui()
         logger.info("GUI: ready")
 
@@ -275,11 +284,12 @@ async def main():
         except Exception:
             pass
 
-    try:
-        from runtime.wx_utils import shutdown as shutdown_wx
-        shutdown_wx()
-    except Exception:
-        pass
+    if not SERVER_MODE:
+        try:
+            from runtime.wx_utils import shutdown as shutdown_wx
+            shutdown_wx()
+        except Exception:
+            pass
 
     logger.info("Goodbye")
 

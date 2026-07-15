@@ -1,527 +1,1003 @@
-# aicp/llm.py
+"""
+LLM — Production-grade multi-provider LLM client.
+
+Supports OpenAI-compatible APIs and Nebula cluster with automatic
+failover, retry logic, streaming, and comprehensive error handling.
+"""
+
+from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
-from typing import Dict, List, Optional, AsyncIterator, Union
-from openai import AsyncOpenAI, AsyncStream
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
+
 import httpx
+from openai import AsyncOpenAI
 
-DEBUG = True
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger("aicp.llm")
 
 
-def _log(msg):
-    if DEBUG:
-        print(f"[LLM] {msg}")
+def _log(msg: str) -> None:
+    """Structured debug logging."""
+    logger.debug(msg)
 
 
-class LLM:
-    def __init__(self, config: dict):
-        self._roles = config.get("models", {}).get("roles", {})
-        self.default_model = self._roles.get("default", config.get("models", {}).get("default", "gpt-3.5-turbo"))
-        
-        self.providers = config.get("models", {}).get("providers", {})
-        self._clients = {}
-        self._model_to_client = {}
-        self._model_configs = {}
-        self.high_quality_model = None
-        self.max_retries = config.get("models", {}).get("max_retries", 3)
-        self.request_timeout = config.get("models", {}).get("request_timeout", 60)
-        _log(f"config models keys: {list(config.get('models', {}).keys())}")
-        _log(f"request_timeout: {config.get('models', {}).get('request_timeout', 'NOT FOUND')}")
-        self.stream_timeout = config.get("models", {}).get("stream_timeout", 300)
-        self.connect_timeout = config.get("models", {}).get("connect_timeout", 10)
-        self._semaphore = asyncio.Semaphore(config.get("models", {}).get("max_concurrent", 10))
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
-        self._nebula_name = None
-        self._nebula_base_url = None
-        self._fallback_model = None
+# Default timeout values (seconds)
+DEFAULT_REQUEST_TIMEOUT: float = 60.0
+DEFAULT_STREAM_TIMEOUT: float = 300.0
+DEFAULT_CONNECT_TIMEOUT: float = 10.0
+DEFAULT_MAX_RETRIES: int = 3
+DEFAULT_MAX_CONCURRENT: int = 10
 
-        self._init_clients()
+# HTTP timeout configuration
+HTTP_TIMEOUT_CONFIG = {
+    "connect": DEFAULT_CONNECT_TIMEOUT,
+    "read": 90.0,
+    "write": 30.0,
+    "pool": DEFAULT_CONNECT_TIMEOUT,
+}
 
-    def _init_clients(self):
-        for name, cfg in self.providers.items():
-            api_key = cfg.get("api_key", "")
-            base_url = cfg.get("base_url", "https://api.openai.com/v1")
 
-            # ============================================================
-            # Nebula 集群 Provider
-            # ============================================================
-            if cfg.get("type") == "cluster":
-                self._clients[name] = {"type": "cluster", "base_url": base_url}
-                if not self._nebula_name:
-                    self._nebula_name = name
-                    self._nebula_base_url = base_url
-                for model_cfg in cfg.get("models", []):
-                    model_id = model_cfg.get("id")
-                    self._model_configs[model_id] = {
-                        "client": name,
-                        "max_tokens": model_cfg.get("max_tokens", 4096),
-                        "temperature": model_cfg.get("temperature", 0.7),
-                        "supports_streaming": False,
-                    }
-                    self._model_to_client[model_id] = name
-                    if model_cfg.get("high_quality"):
-                        self.high_quality_model = model_id
-                    _log(f"✅ {model_id} ({name}) [cluster]")
-                continue
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
 
-            # ============================================================
-            # OpenAI 兼容 Provider
-            # ============================================================
-            if not api_key or api_key.startswith("${"):
-                _log(f"⚠️ Skip {name}: API key not configured")
-                continue
 
-            timeout = httpx.Timeout(
-                timeout=120.0,
-                connect=self.connect_timeout,
-                read=90.0,
-                write=30.0,
-                pool=self.connect_timeout
-            )
-            
-            client = AsyncOpenAI(
-                api_key=api_key,
-                base_url=base_url,
-                timeout=timeout,
-                http_client=httpx.AsyncClient(
-                    timeout=timeout,
-                    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
-                ),
-                max_retries=0
-            )
-            self._clients[name] = client
+@dataclass
+class ModelConfig:
+    """Validated model configuration."""
+    client_name: str
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    supports_streaming: bool = True
+    high_quality: bool = False
 
-            for model_cfg in cfg.get("models", []):
-                model_id = model_cfg.get("id")
-                self._model_configs[model_id] = {
-                    "client": name,
-                    "max_tokens": model_cfg.get("max_tokens", 4096),
-                    "temperature": model_cfg.get("temperature", 0.7),
-                    "supports_streaming": model_cfg.get("supports_streaming", True),
-                }
-                self._model_to_client[model_id] = name
-                if model_cfg.get("high_quality"):
-                    self.high_quality_model = model_id
-                _log(f"✅ {model_id} ({name})")
 
-        # 确保 default_model 存在
-        if self.default_model not in self._model_to_client:
-            if self._model_to_client:
-                self.default_model = next(iter(self._model_to_client))
-                _log(f"⚠️ roles.default 模型不可用，改用: {self.default_model}")
-            else:
-                _log(f"❌ 没有任何可用模型！")
+@dataclass
+class ProviderConfig:
+    """Provider configuration container."""
+    name: str
+    type: str  # "openai" or "cluster"
+    api_key: str = ""
+    base_url: str = "https://api.openai.com/v1"
+    models: List[Dict[str, Any]] = field(default_factory=list)
 
-        # 找第一个非 nebula 模型作为降级
-        for model_id, client_name in self._model_to_client.items():
-            client = self._clients.get(client_name)
-            is_nebula = False
-            if isinstance(client, dict):
-                is_nebula = client.get("type") == "cluster"
-            if not is_nebula and not client_name.startswith("nebula"):
-                self._fallback_model = model_id
-                break
 
-        _log(f"🤖 Default: {self.default_model} | Models: {len(self._model_to_client)}")
-        if self._roles:
-            _log(f"📋 Roles: {self._roles}")
+@dataclass
+class NebulaResponse:
+    """Parsed Nebula cluster response."""
+    content: Optional[str] = None
+    error: Optional[str] = None
+    elapsed: float = 0.0
+    success: bool = False
 
-    # ============================================================
-    # 模型解析
-    # ============================================================
-    def _resolve_model(self, role: str = None) -> str:
-        if role:
-            model = self._roles.get(role)
-            if model and model in self._model_to_client:
-                return model
-            elif model:
-                _log(f"⚠️ roles.{role}={model} 不可用，降级到 default")
-        return self.default_model
 
-    def _get_client(self, model: str = None):
-        model = model or self.default_model
-        client_name = self._model_to_client.get(model)
-        if client_name:
-            return self._clients[client_name], model
-        if self._clients:
-            name = next(iter(self._clients))
-            return self._clients[name], model
-        return None, model
+# ---------------------------------------------------------------------------
+# Error types
+# ---------------------------------------------------------------------------
 
-    def _has_image_or_file(self, messages: List[Dict]) -> bool:
-        for msg in messages:
-            content = msg.get("content", "")
-            if isinstance(content, list):
-                for part in content:
-                    if part.get("type") in ("image_url", "file"):
-                        return True
-        return False
 
-    # ============================================================
-    # Nebula 集群调用
-    # ============================================================
-    def _call_nebula_sync(self, base_url: str, messages: List[Dict]) -> Optional[str]:
-        """同步调用 Newbula Plus（支持纯文字、图片、文件）"""
-        try:
+class LLMError(Exception):
+    """Base exception for LLM-related errors."""
+    pass
+
+
+class LLMNotConfiguredError(LLMError):
+    """Raised when no LLM client is configured."""
+    pass
+
+
+class LLMTimeoutError(LLMError):
+    """Raised when an LLM request times out."""
+    pass
+
+
+class LLMEmptyResponseError(LLMError):
+    """Raised when LLM returns an empty response."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Safe fallback constants
+# ---------------------------------------------------------------------------
+
+# Messages returned to users when LLM fails (never None)
+FALLBACK_MESSAGES = {
+    "not_configured": "[LLM 未配置]",
+    "nebula_unavailable": "[Nebula 不可用且无降级模型]",
+    "empty_response": "[模型返回空响应，请稍后重试]",
+    "timeout": "[服务请求超时，请稍后重试]",
+    "max_retries": "[LLM 达到最大重试次数]",
+    "system_error": "[系统错误]",
+    "empty": "[空响应]",
+}
+
+
+# ---------------------------------------------------------------------------
+# Nebula HTTP client (shared, synchronous)
+# ---------------------------------------------------------------------------
+
+
+class NebulaClient:
+    """Thread-safe HTTP client for Nebula cluster API."""
+
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._session: Optional[Any] = None  # requests.Session
+
+    def _ensure_session(self) -> Any:
+        """Lazy-initialize requests session."""
+        if self._session is None:
             import requests
+            self._session = requests.Session()
+            self._session.headers.update({
+                "Content-Type": "application/json",
+                "User-Agent": "AICP-LLM/1.0",
+            })
+        return self._session
 
-            image_path = None
-            file_path = None
-            text_messages = []
+    def chat(
+        self,
+        messages: List[Dict[str, Any]],
+        timeout: float = 180.0,
+    ) -> NebulaResponse:
+        """Send chat request to Nebula cluster.
 
-            for msg in messages:
-                content = msg.get("content", "")
-                if isinstance(content, list):
-                    text_parts = []
-                    for part in content:
-                        if part.get("type") == "image_url":
-                            url = part.get("image_url", {}).get("url", "")
-                            if url.startswith("file://"):
-                                image_path = url[7:]
-                            else:
-                                image_path = url
-                        elif part.get("type") == "file":
-                            file_path = part.get("file", {}).get("file_path", "")
-                        else:
-                            text_parts.append(part.get("text", ""))
-                    msg = {"role": msg.get("role", "user"), "content": " ".join(text_parts)}
-                text_messages.append(msg)
+        Args:
+            messages: Chat messages (supports text, image, file)
+            timeout: Request timeout in seconds
 
+        Returns:
+            NebulaResponse with content or error
+        """
+        import requests
+
+        t0 = time.time()
+
+        try:
+            # Parse messages for multimodal content
+            image_path, file_path, text_messages = self._parse_messages(messages)
+
+            # Build payload
             if file_path:
-                action = "chat_with_file"
-                payload = {"action": action, "messages": text_messages, "file_path": file_path}
+                payload = {
+                    "action": "chat_with_file",
+                    "messages": text_messages,
+                    "file_path": file_path,
+                }
             elif image_path:
-                action = "chat_with_image"
-                payload = {"action": action, "messages": text_messages, "image_path": image_path}
+                payload = {
+                    "action": "chat_with_image",
+                    "messages": text_messages,
+                    "image_path": image_path,
+                }
             else:
-                action = "chat"
-                payload = {"action": action, "messages": text_messages}
+                payload = {
+                    "action": "chat",
+                    "messages": text_messages,
+                }
 
-            t0 = time.time()
-            resp = requests.post(
-                base_url,
+            session = self._ensure_session()
+            resp = session.post(
+                self._base_url,
                 json={"payload": payload},
-                timeout=(10, 180)
+                timeout=(10, timeout),
             )
-            
+            resp.raise_for_status()
+
             data = resp.json()
-            
+
             if data.get("error"):
-                _log(f"nebula error: {data.get('error')}")
-                return None
-            
+                return NebulaResponse(
+                    error=str(data["error"]),
+                    elapsed=time.time() - t0,
+                )
+
             choices = data.get("choices", [])
             if choices:
                 content = choices[0].get("message", {}).get("content", "")
+                elapsed = time.time() - t0
                 if content and content.strip():
-                    _log(f"nebula ← {len(content)} chars, {time.time()-t0:.1f}s")
-                    return content
-            
-            _log(f"nebula ← 空 ({time.time()-t0:.1f}s)")
-            return None
+                    _log(f"nebula ← {len(content)} chars, {elapsed:.1f}s")
+                    return NebulaResponse(
+                        content=content,
+                        elapsed=elapsed,
+                        success=True,
+                    )
 
-        except requests.exceptions.ConnectionError:
-            _log("nebula connection error")
-            return None
-        except Exception as e:
-            _log(f"nebula error: {type(e).__name__}: {str(e)[:100]}")
-            return None
-
-    def _generate_image_nebula_sync(self, base_url: str, prompt: str, n: int = 4) -> List[str]:
-        """同步调用 Newbula Plus 生图"""
-        try:
-            import requests
-
-            payload = {"action": "image", "prompt": prompt, "n": n}
-
-            resp = requests.post(
-                base_url,
-                json={"payload": payload},
-                timeout=(10, 180)
+            return NebulaResponse(
+                content=None,
+                elapsed=time.time() - t0,
+                success=False,
             )
-            
+
+        except requests.exceptions.ConnectionError as exc:
+            _log(f"nebula connection error: {exc}")
+            return NebulaResponse(
+                error=f"连接失败: {exc}",
+                elapsed=time.time() - t0,
+            )
+        except requests.exceptions.Timeout as exc:
+            _log(f"nebula timeout: {exc}")
+            return NebulaResponse(
+                error=f"请求超时",
+                elapsed=time.time() - t0,
+            )
+        except Exception as exc:
+            _log(f"nebula error: {type(exc).__name__}: {str(exc)[:100]}")
+            return NebulaResponse(
+                error=f"{type(exc).__name__}: {str(exc)[:100]}",
+                elapsed=time.time() - t0,
+            )
+
+    def generate_image(
+        self,
+        prompt: str,
+        n: int = 4,
+        timeout: float = 180.0,
+    ) -> List[str]:
+        """Generate images via Nebula cluster.
+
+        Args:
+            prompt: Image description
+            n: Number of images
+            timeout: Request timeout
+
+        Returns:
+            List of image URLs
+        """
+        import requests
+
+        try:
+            payload = {
+                "action": "image",
+                "prompt": prompt,
+                "n": n,
+            }
+
+            session = self._ensure_session()
+            resp = session.post(
+                self._base_url,
+                json={"payload": payload},
+                timeout=(10, timeout),
+            )
+            resp.raise_for_status()
+
             data = resp.json()
-            
+
             if data.get("error"):
-                _log(f"nebula image error: {data.get('error')}")
+                _log(f"nebula image error: {data['error']}")
                 return []
-            
+
             images = data.get("data", [])
             urls = [img.get("url") for img in images if img.get("url")]
             _log(f"nebula image ← {len(urls)} 张")
             return urls
 
-        except Exception as e:
-            _log(f"nebula image error: {e}")
+        except Exception as exc:
+            _log(f"nebula image error: {type(exc).__name__}: {str(exc)[:100]}")
             return []
 
-    # ============================================================
-    # 核心实现
-    # ============================================================
-    async def _chat_impl(self, messages, model=None, **kwargs):
-        """内部实现，确保不返回 None"""
-        client, actual_model = self._get_client(model)
-        result = "[LLM 未配置]"
+    @staticmethod
+    def _parse_messages(
+        messages: List[Dict[str, Any]]
+    ) -> tuple[Optional[str], Optional[str], List[Dict[str, Any]]]:
+        """Parse messages to extract image/file paths and build text messages.
 
-        if not client:
-            return result
+        Args:
+            messages: Raw chat messages
 
-        # ============================================================
-        # Nebula 集群
-        # ============================================================
-        if isinstance(client, dict) and client.get("type") == "cluster":
-            _log(f"nebula cluster path, model={actual_model}")
-            try:
-                loop = asyncio.get_running_loop()
-                raw_result = await asyncio.wait_for(
-                    loop.run_in_executor(None, self._call_nebula_sync, client["base_url"], messages),
-                    timeout=180
+        Returns:
+            Tuple of (image_path, file_path, text_messages)
+        """
+        image_path: Optional[str] = None
+        file_path: Optional[str] = None
+        text_messages: List[Dict[str, Any]] = []
+
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                text_parts: List[str] = []
+                for part in content:
+                    part_type = part.get("type", "")
+                    if part_type == "image_url":
+                        url = part.get("image_url", {}).get("url", "")
+                        image_path = url[7:] if url.startswith("file://") else url
+                    elif part_type == "file":
+                        file_path = part.get("file", {}).get("file_path", "")
+                    else:
+                        text_parts.append(str(part.get("text", "")))
+                msg = {
+                    "role": msg.get("role", "user"),
+                    "content": " ".join(text_parts),
+                }
+            text_messages.append(msg)
+
+        return image_path, file_path, text_messages
+
+
+# ---------------------------------------------------------------------------
+# Main LLM class
+# ---------------------------------------------------------------------------
+
+
+class LLM:
+    """Production-grade multi-provider LLM client.
+
+    Supports:
+    - OpenAI-compatible APIs (via openai library)
+    - Nebula cluster (via HTTP)
+    - Automatic failover from Nebula to OpenAI-compatible
+    - Streaming responses
+    - Image generation
+    - JSON structured output
+    - Concurrency control via semaphore
+    """
+
+    def __init__(self, config: Dict[str, Any]) -> None:
+        """Initialize LLM client from configuration.
+
+        Args:
+            config: Configuration dictionary with 'models' section
+        """
+        models_cfg = config.get("models", {})
+
+        # Role-based model selection
+        self._roles: Dict[str, str] = models_cfg.get("roles", {})
+        self.default_model: str = self._roles.get(
+            "default",
+            models_cfg.get("default", "gpt-3.5-turbo"),
+        )
+
+        # Providers
+        self.providers: Dict[str, Any] = models_cfg.get("providers", {})
+
+        # Internal state
+        self._clients: Dict[str, Any] = {}
+        self._model_to_client: Dict[str, str] = {}
+        self._model_configs: Dict[str, ModelConfig] = {}
+        self._nebula_client: Optional[NebulaClient] = None
+        self.high_quality_model: Optional[str] = None
+
+        # Retry & timeout configuration
+        self.max_retries: int = models_cfg.get("max_retries", DEFAULT_MAX_RETRIES)
+        self.request_timeout: float = models_cfg.get(
+            "request_timeout", DEFAULT_REQUEST_TIMEOUT
+        )
+        self.stream_timeout: float = models_cfg.get(
+            "stream_timeout", DEFAULT_STREAM_TIMEOUT
+        )
+        self.connect_timeout: float = models_cfg.get(
+            "connect_timeout", DEFAULT_CONNECT_TIMEOUT
+        )
+
+        # Concurrency control
+        max_concurrent: int = models_cfg.get("max_concurrent", DEFAULT_MAX_CONCURRENT)
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+
+        # Fallback model for Nebula failures
+        self._fallback_model: Optional[str] = None
+
+        _log(f"📋 Config models keys: {list(models_cfg.keys())}")
+        _log(f"⏱️ request_timeout: {self.request_timeout}s")
+
+        # Initialize all providers
+        self._init_clients()
+
+    # ======================================================================
+    # Provider initialization
+    # ======================================================================
+
+    def _init_clients(self) -> None:
+        """Initialize all configured providers."""
+        for name, cfg in self.providers.items():
+            provider = ProviderConfig(
+                name=name,
+                type=cfg.get("type", "openai"),
+                api_key=cfg.get("api_key", ""),
+                base_url=cfg.get("base_url", "https://api.openai.com/v1"),
+                models=cfg.get("models", []),
+            )
+
+            if provider.type == "cluster":
+                self._init_cluster_provider(provider)
+            else:
+                self._init_openai_provider(provider)
+
+        # Validate default model
+        self._validate_default_model()
+
+        # Find fallback model (first non-Nebula model)
+        self._find_fallback_model()
+
+        # Log summary
+        _log(f"🤖 Default: {self.default_model} | Models: {len(self._model_to_client)}")
+        if self._roles:
+            _log(f"📋 Roles: {self._roles}")
+
+    def _init_cluster_provider(self, provider: ProviderConfig) -> None:
+        """Initialize a Nebula cluster provider."""
+        self._clients[provider.name] = {
+            "type": "cluster",
+            "base_url": provider.base_url,
+        }
+
+        # Initialize shared Nebula client
+        if self._nebula_client is None:
+            self._nebula_client = NebulaClient(provider.base_url)
+
+        for model_cfg in provider.models:
+            model_id = model_cfg.get("id")
+            if not model_id:
+                continue
+
+            self._model_configs[model_id] = ModelConfig(
+                client_name=provider.name,
+                max_tokens=model_cfg.get("max_tokens", 4096),
+                temperature=model_cfg.get("temperature", 0.7),
+                supports_streaming=False,  # Nebula does not support streaming natively
+                high_quality=model_cfg.get("high_quality", False),
+            )
+            self._model_to_client[model_id] = provider.name
+
+            if model_cfg.get("high_quality"):
+                self.high_quality_model = model_id
+
+            _log(f"✅ {model_id} ({provider.name}) [cluster]")
+
+    def _init_openai_provider(self, provider: ProviderConfig) -> None:
+        """Initialize an OpenAI-compatible provider."""
+        # Skip if API key is not set
+        if not provider.api_key or provider.api_key.startswith("${"):
+            _log(f"⚠️ Skip {provider.name}: API key not configured")
+            return
+
+        try:
+            timeout = httpx.Timeout(
+                timeout=120.0,
+                connect=self.connect_timeout,
+                read=HTTP_TIMEOUT_CONFIG["read"],
+                write=HTTP_TIMEOUT_CONFIG["write"],
+                pool=self.connect_timeout,
+            )
+
+            client = AsyncOpenAI(
+                api_key=provider.api_key,
+                base_url=provider.base_url,
+                timeout=timeout,
+                http_client=httpx.AsyncClient(
+                    timeout=timeout,
+                    limits=httpx.Limits(
+                        max_keepalive_connections=5,
+                        max_connections=10,
+                    ),
+                ),
+                max_retries=0,  # We handle retries ourselves
+            )
+            self._clients[provider.name] = client
+
+            for model_cfg in provider.models:
+                model_id = model_cfg.get("id")
+                if not model_id:
+                    continue
+
+                self._model_configs[model_id] = ModelConfig(
+                    client_name=provider.name,
+                    max_tokens=model_cfg.get("max_tokens", 4096),
+                    temperature=model_cfg.get("temperature", 0.7),
+                    supports_streaming=model_cfg.get("supports_streaming", True),
+                    high_quality=model_cfg.get("high_quality", False),
                 )
-                
-                if raw_result is None:
-                    result = None
-                else:
-                    result = raw_result.strip() if isinstance(raw_result, str) else str(raw_result)
-                    if not result:
-                        result = None
-                        
-            except asyncio.TimeoutError:
-                _log("nebula timeout")
-                result = None
-            except Exception as e:
-                _log(f"nebula error: {type(e).__name__}: {str(e)[:100]}")
-                result = None
+                self._model_to_client[model_id] = provider.name
 
-            # Nebula 失败 → 降级
+                if model_cfg.get("high_quality"):
+                    self.high_quality_model = model_id
+
+                _log(f"✅ {model_id} ({provider.name})")
+
+        except Exception as exc:
+            _log(f"❌ Failed to init {provider.name}: {exc}")
+
+    def _validate_default_model(self) -> None:
+        """Ensure default_model exists, or fall back to first available."""
+        if self.default_model not in self._model_to_client:
+            if self._model_to_client:
+                self.default_model = next(iter(self._model_to_client))
+                _log(f"⚠️ roles.default 模型不可用，改用: {self.default_model}")
+            else:
+                _log("❌ 没有任何可用模型！")
+
+    def _find_fallback_model(self) -> None:
+        """Find first non-Nebula model for failover."""
+        for model_id, client_name in self._model_to_client.items():
+            client = self._clients.get(client_name)
+            is_nebula = isinstance(client, dict) and client.get("type") == "cluster"
+            if not is_nebula:
+                self._fallback_model = model_id
+                _log(f"🔄 降级模型: {self._fallback_model}")
+                break
+
+    # ======================================================================
+    # Model resolution
+    # ======================================================================
+
+    def _resolve_model(self, role: Optional[str] = None) -> str:
+        """Resolve model from role or return default.
+
+        Args:
+            role: Role name (e.g., "coding", "reasoning")
+
+        Returns:
+            Resolved model ID (never None)
+        """
+        if not role:
+            return self.default_model
+
+        model = self._roles.get(role)
+        if model and model in self._model_to_client:
+            return model
+
+        if model:
+            _log(f"⚠️ roles.{role}={model} 不可用，降级到 default")
+
+        return self.default_model
+
+    def _get_client(self, model: Optional[str] = None) -> tuple[Optional[Any], str]:
+        """Get client and actual model name.
+
+        Args:
+            model: Requested model ID
+
+        Returns:
+            Tuple of (client, resolved_model)
+        """
+        resolved_model = model or self.default_model
+        client_name = self._model_to_client.get(resolved_model)
+
+        if client_name and client_name in self._clients:
+            return self._clients[client_name], resolved_model
+
+        # Fallback to first available client
+        if self._clients:
+            name = next(iter(self._clients))
+            return self._clients[name], resolved_model
+
+        return None, resolved_model
+
+    def _is_nebula_client(self, client: Any) -> bool:
+        """Check if client is a Nebula cluster client."""
+        return isinstance(client, dict) and client.get("type") == "cluster"
+
+    # ======================================================================
+    # Nebula integration
+    # ======================================================================
+
+    async def _call_nebula(
+        self,
+        messages: List[Dict[str, Any]],
+        timeout: float = 180.0,
+    ) -> Optional[str]:
+        """Call Nebula cluster asynchronously.
+
+        Args:
+            messages: Chat messages
+            timeout: Request timeout
+
+        Returns:
+            Response content or None on failure
+        """
+        if self._nebula_client is None:
+            return None
+
+        try:
+            loop = asyncio.get_running_loop()
+            response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    self._nebula_client.chat,
+                    messages,
+                    timeout,
+                ),
+                timeout=timeout + 10,  # Slightly longer than HTTP timeout
+            )
+
+            if response.success and response.content:
+                return response.content.strip()
+
+            if response.error:
+                _log(f"nebula error: {response.error}")
+
+            return None
+
+        except asyncio.TimeoutError:
+            _log("nebula timeout")
+            return None
+        except Exception as exc:
+            _log(f"nebula error: {type(exc).__name__}: {str(exc)[:100]}")
+            return None
+
+    async def _try_nebula_first(
+        self,
+        messages: List[Dict[str, Any]],
+    ) -> Optional[str]:
+        """Try Nebula cluster before falling back to default model.
+
+        Args:
+            messages: Chat messages
+
+        Returns:
+            Response content or None
+        """
+        if self._nebula_client is None:
+            return None
+
+        try:
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None,
+                self._nebula_client.chat,
+                messages,
+                30.0,  # Short timeout for preflight
+            )
+
+            if (
+                response.success
+                and response.content
+                and response.content.strip()
+                and not response.content.startswith("[")
+            ):
+                _log("✅ Nebula 命中！")
+                return response.content.strip()
+
+        except Exception:
+            pass
+
+        return None
+
+    # ======================================================================
+    # Retry logic
+    # ======================================================================
+
+    @staticmethod
+    def _calculate_backoff(attempt: int, max_wait: int = 10) -> float:
+        """Calculate exponential backoff with jitter.
+
+        Args:
+            attempt: Current attempt number (0-based)
+            max_wait: Maximum wait time in seconds
+
+        Returns:
+            Wait time in seconds
+        """
+        import random
+        wait = min(2 ** attempt, max_wait)
+        jitter = random.uniform(0, wait * 0.5)
+        return wait + jitter
+
+    # ======================================================================
+    # Core chat implementation
+    # ======================================================================
+
+    async def _chat_impl(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Internal chat implementation. Guaranteed to return a string.
+
+        Args:
+            messages: Chat messages
+            model: Model ID (optional)
+            **kwargs: Additional parameters
+
+        Returns:
+            Response string (never None)
+        """
+        client, actual_model = self._get_client(model)
+
+        # No client available
+        if client is None:
+            return FALLBACK_MESSAGES["not_configured"]
+
+        # ==================================================================
+        # Nebula cluster path
+        # ==================================================================
+        if self._is_nebula_client(client):
+            _log(f"nebula cluster path, model={actual_model}")
+
+            result = await self._call_nebula(messages)
+
+            # Nebula failed → fallback to non-Nebula model
             if result is None and self._fallback_model:
                 _log(f"🔄 Nebula 不可用，降级到 {self._fallback_model}")
                 return await self._chat_impl(messages, self._fallback_model, **kwargs)
-            
-            return result if result else "[Nebula 不可用且无降级模型]"
 
-        # ============================================================
-        # default 模型先偷跑 Nebula
-        # ============================================================
-        if actual_model == self.default_model and self._nebula_name:
-            nebula_client = self._clients.get(self._nebula_name)
-            if nebula_client and isinstance(nebula_client, dict) and nebula_client.get("type") == "cluster":
-                try:
-                    loop = asyncio.get_running_loop()
-                    raw = await loop.run_in_executor(None, self._call_nebula_sync, nebula_client["base_url"], messages)
-                    if raw and raw.strip() and not raw.startswith("["):
-                        _log(f"✅ Nebula 命中！")
-                        return raw
-                except:
-                    pass
+            return result if result else FALLBACK_MESSAGES["nebula_unavailable"]
 
-        # ============================================================
-        # OpenAI 兼容客户端
-        # ============================================================
-        config = self._model_configs.get(actual_model, {})
-        max_tokens = kwargs.pop("max_tokens", config.get("max_tokens", 4096))
-        temperature = kwargs.pop("temperature", config.get("temperature", 0.7))
+        # ==================================================================
+        # Try Nebula preflight for default model
+        # ==================================================================
+        if actual_model == self.default_model:
+            nebula_result = await self._try_nebula_first(messages)
+            if nebula_result is not None:
+                return nebula_result
+
+        # ==================================================================
+        # OpenAI-compatible client path
+        # ==================================================================
+        config = self._model_configs.get(actual_model, ModelConfig(client_name="unknown"))
+        max_tokens = kwargs.pop("max_tokens", config.max_tokens)
+        temperature = kwargs.pop("temperature", config.temperature)
+
+        last_error: Optional[str] = None
 
         for attempt in range(self.max_retries):
             try:
-                _log(f"🔄 API call {attempt+1}/{self.max_retries} → {actual_model}")
+                _log(f"🔄 API call {attempt + 1}/{self.max_retries} → {actual_model}")
                 t0 = time.time()
-                
+
                 task = asyncio.create_task(
                     client.chat.completions.create(
                         model=actual_model,
                         messages=messages,
                         max_tokens=max_tokens,
                         temperature=temperature,
-                        **kwargs
+                        **kwargs,
                     )
                 )
-                
+
                 try:
-                    response = await asyncio.wait_for(task, timeout=self.request_timeout)
+                    response = await asyncio.wait_for(
+                        task,
+                        timeout=self.request_timeout,
+                    )
                 except asyncio.TimeoutError:
                     task.cancel()
                     try:
                         await task
-                    except:
+                    except (asyncio.CancelledError, Exception):
                         pass
                     raise
-                
+
                 elapsed = time.time() - t0
-                
-                if response and response.choices and response.choices[0].message.content:
+
+                # Validate response
+                if (
+                    response
+                    and response.choices
+                    and response.choices[0].message.content
+                ):
                     result = response.choices[0].message.content.strip()
                     if result:
                         _log(f"✅ 成功 ({elapsed:.1f}s, {len(result)} chars)")
                         return result
-                
+
                 _log(f"⚠️ 空响应 ({elapsed:.1f}s)")
-                if attempt == self.max_retries - 1:
-                    return "[模型返回空响应，请稍后重试]"
-                    
+                last_error = "empty_response"
+
             except asyncio.TimeoutError:
-                _log(f"⏱️ 超时 attempt {attempt+1}")
-                if attempt == self.max_retries - 1:
-                    return "[服务请求超时，请稍后重试]"
-            except Exception as e:
-                error_msg = str(e)
-                _log(f"❌ 错误 attempt {attempt+1}: {type(e).__name__}: {error_msg[:100]}")
-                if attempt == self.max_retries - 1:
-                    return f"[LLM请求失败: {error_msg[:200]}]"
-            
+                _log(f"⏱️ 超时 attempt {attempt + 1}")
+                last_error = "timeout"
+            except Exception as exc:
+                error_msg = str(exc)[:200]
+                _log(f"❌ 错误 attempt {attempt + 1}: {type(exc).__name__}: {error_msg[:100]}")
+                last_error = error_msg
+
+            # Don't sleep on last attempt
             if attempt < self.max_retries - 1:
-                wait_time = min(2 ** attempt, 10)
-                await asyncio.sleep(wait_time)
+                wait = self._calculate_backoff(attempt)
+                _log(f"⏳ 等待 {wait:.1f}s 后重试...")
+                await asyncio.sleep(wait)
 
-        return "[LLM 达到最大重试次数]"
+        # All retries exhausted
+        if last_error == "timeout":
+            return FALLBACK_MESSAGES["timeout"]
+        elif last_error == "empty_response":
+            return FALLBACK_MESSAGES["empty_response"]
+        else:
+            return f"[LLM请求失败: {last_error[:200]}]"
 
-    # ============================================================
-    # 公开接口
-    # ============================================================
+    # ======================================================================
+    # Public API
+    # ======================================================================
 
-    async def chat(self, messages: List[Dict], model: str = None, role: str = None, **kwargs) -> str:
-        """
-        聊天接口
-        
+    async def chat(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        role: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Chat completion interface.
+
         Args:
-            messages: 消息列表
-            model: 直接指定模型名（优先级最高）
-            role: 通过角色选择模型（"default", "coding", "reasoning", "image"）
+            messages: List of message dicts with 'role' and 'content'
+            model: Direct model ID (highest priority)
+            role: Role-based model selection ("default", "coding", "reasoning")
+            **kwargs: Additional parameters passed to API
+
+        Returns:
+            Response string (guaranteed non-None, non-empty)
         """
+        # Resolve model
         if model:
             resolved_model = model
         elif role:
             resolved_model = self._resolve_model(role)
         else:
             resolved_model = self.default_model
-        
+
         _log(f"💬 chat: {resolved_model}" + (f" (role={role})" if role else ""))
-        
+
         try:
             async with self._semaphore:
                 result = await self._chat_impl(messages, resolved_model, **kwargs)
-                
-                if result is None:
-                    result = "[系统错误]"
-                elif not isinstance(result, str):
-                    result = str(result)
-                elif not result.strip():
-                    result = "[空响应]"
-                    
-                return result
-        except Exception as e:
-            _log(f"❌ chat 异常: {type(e).__name__}: {str(e)[:100]}")
-            return f"[系统错误: {str(e)[:100]}]"
 
-    async def _chat_stream_impl(self, messages, model=None, **kwargs):
-        """流式实现"""
+                # Guarantee a valid string return
+                if result is None:
+                    return FALLBACK_MESSAGES["system_error"]
+                if not isinstance(result, str):
+                    result = str(result)
+                if not result.strip():
+                    return FALLBACK_MESSAGES["empty"]
+
+                return result
+
+        except Exception as exc:
+            _log(f"❌ chat 异常: {type(exc).__name__}: {str(exc)[:100]}")
+            return f"[系统错误: {str(exc)[:100]}]"
+
+    # ======================================================================
+    # Streaming
+    # ======================================================================
+
+    async def _chat_stream_impl(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Internal streaming implementation.
+
+        Args:
+            messages: Chat messages
+            model: Model ID
+            **kwargs: Additional parameters
+
+        Yields:
+            Text chunks
+        """
         client, actual_model = self._get_client(model)
 
-        if not client:
-            yield "[LLM not configured]"
+        # No client available
+        if client is None:
+            yield FALLBACK_MESSAGES["not_configured"]
             return
 
-        # ============================================================
-        # Nebula 集群流式（模拟）
-        # ============================================================
-        if isinstance(client, dict) and client.get("type") == "cluster":
+        # ==================================================================
+        # Nebula cluster (simulated streaming)
+        # ==================================================================
+        if self._is_nebula_client(client):
             result = await self._chat_impl(messages, model, **kwargs)
-            if result:
+            if result and not result.startswith("["):
+                # Simulate streaming by chunking
                 chunk_size = 10
                 for i in range(0, len(result), chunk_size):
-                    yield result[i:i+chunk_size]
+                    yield result[i : i + chunk_size]
                     await asyncio.sleep(0.01)
             else:
-                yield "[空响应]"
+                yield FALLBACK_MESSAGES["empty"]
             return
 
-        # ============================================================
-        # default 模型先偷跑 Nebula
-        # ============================================================
-        if actual_model == self.default_model and self._nebula_name:
-            nebula_client = self._clients.get(self._nebula_name)
-            if nebula_client and isinstance(nebula_client, dict) and nebula_client.get("type") == "cluster":
-                try:
-                    loop = asyncio.get_running_loop()
-                    raw = await loop.run_in_executor(None, self._call_nebula_sync, nebula_client["base_url"], messages)
-                    if raw and raw.strip() and not raw.startswith("["):
-                        _log(f"✅ Nebula 流式命中！")
-                        chunk_size = 10
-                        for i in range(0, len(raw), chunk_size):
-                            yield raw[i:i+chunk_size]
-                            await asyncio.sleep(0.01)
-                        return
-                except:
-                    pass
+        # ==================================================================
+        # Try Nebula preflight for default model
+        # ==================================================================
+        if actual_model == self.default_model:
+            nebula_result = await self._try_nebula_first(messages)
+            if nebula_result is not None:
+                chunk_size = 10
+                for i in range(0, len(nebula_result), chunk_size):
+                    yield nebula_result[i : i + chunk_size]
+                    await asyncio.sleep(0.01)
+                return
 
-        # ============================================================
-        # OpenAI 兼容客户端
-        # ============================================================
-        config = self._model_configs.get(actual_model, {})
-        if not config.get("supports_streaming", True):
+        # ==================================================================
+        # OpenAI-compatible streaming
+        # ==================================================================
+        config = self._model_configs.get(actual_model, ModelConfig(client_name="unknown"))
+
+        # If streaming not supported, fall back to non-streaming
+        if not config.supports_streaming:
             result = await self._chat_impl(messages, model, **kwargs)
-            if result:
+            if result and not result.startswith("["):
                 yield result
             else:
-                yield "[空响应]"
+                yield FALLBACK_MESSAGES["empty"]
             return
 
-        max_tokens = kwargs.pop("max_tokens", config.get("max_tokens", 4096))
-        temperature = kwargs.pop("temperature", config.get("temperature", 0.7))
+        max_tokens = kwargs.pop("max_tokens", config.max_tokens)
+        temperature = kwargs.pop("temperature", config.temperature)
 
         for attempt in range(self.max_retries):
             stream = None
             try:
-                _log(f"📡 stream {attempt+1}/{self.max_retries} → {actual_model}")
+                _log(f"📡 stream {attempt + 1}/{self.max_retries} → {actual_model}")
+
                 stream = await client.chat.completions.create(
                     model=actual_model,
                     messages=messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
                     stream=True,
-                    **kwargs
+                    **kwargs,
                 )
-                collected = []
+
+                collected: List[str] = []
                 async for chunk in stream:
                     if chunk.choices and chunk.choices[0].delta.content:
                         token = chunk.choices[0].delta.content
                         if token:
                             collected.append(token)
                             yield token
-                _log(f"✅ stream 完成: {len(''.join(collected))} chars")
+
+                full_text = "".join(collected)
+                _log(f"✅ stream 完成: {len(full_text)} chars")
                 return
+
             except asyncio.TimeoutError:
-                _log(f"⏱️ stream 超时 attempt {attempt+1}")
+                _log(f"⏱️ stream 超时 attempt {attempt + 1}")
                 if attempt == self.max_retries - 1:
-                    yield "[LLM stream timeout]"
+                    yield FALLBACK_MESSAGES["timeout"]
                     return
-            except Exception as e:
-                error_msg = str(e)
-                _log(f"❌ stream 错误: {type(e).__name__}: {error_msg[:100]}")
+            except Exception as exc:
+                error_msg = str(exc)[:200]
+                _log(f"❌ stream 错误: {type(exc).__name__}: {error_msg[:100]}")
                 if attempt == self.max_retries - 1:
                     yield f"[LLM stream error: {error_msg[:200]}]"
                     return
             finally:
-                if stream and hasattr(stream, 'close'):
+                # Always close stream to release resources
+                if stream is not None:
                     try:
                         await stream.close()
-                    except:
+                    except Exception:
                         pass
-            
+
             if attempt < self.max_retries - 1:
-                await asyncio.sleep(min(2 ** attempt, 10))
+                await asyncio.sleep(self._calculate_backoff(attempt, max_wait=10))
 
-        yield "[LLM max retries exceeded]"
+        yield FALLBACK_MESSAGES["max_retries"]
 
-    async def chat_stream(self, messages, model=None, role=None, **kwargs):
-        """
-        流式聊天接口
-        
+    async def chat_stream(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        role: Optional[str] = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Streaming chat interface.
+
         Args:
-            messages: 消息列表
-            model: 直接指定模型名（优先级最高）
-            role: 通过角色选择模型
+            messages: List of message dicts
+            model: Direct model ID (highest priority)
+            role: Role-based model selection
+            **kwargs: Additional parameters
+
+        Yields:
+            Text chunks
         """
         if model:
             resolved_model = model
@@ -529,99 +1005,162 @@ class LLM:
             resolved_model = self._resolve_model(role)
         else:
             resolved_model = self.default_model
-        
+
         async with self._semaphore:
-            async for token in self._chat_stream_impl(messages, resolved_model, **kwargs):
+            async for token in self._chat_stream_impl(
+                messages,
+                resolved_model,
+                **kwargs,
+            ):
                 if token:
                     yield token
 
-    # ============================================================
-    # 生图接口
-    # ============================================================
-    async def generate_image(self, prompt: str, model: str = None, n: int = 4, **kwargs) -> List[str]:
-        """
-        图像生成接口
-        
+    # ======================================================================
+    # Image generation
+    # ======================================================================
+
+    async def generate_image(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        n: int = 4,
+        **kwargs: Any,
+    ) -> List[str]:
+        """Image generation interface.
+
         Args:
-            prompt: 图片描述
-            model: 模型名
-            n: 生成数量
+            prompt: Image description
+            model: Model ID
+            n: Number of images to generate
+            **kwargs: Additional parameters
+
+        Returns:
+            List of image URLs (empty list on failure)
         """
-        if model:
-            resolved_model = model
-        else:
-            resolved_model = self.default_model
-        
+        resolved_model = model or self.default_model
         client, actual_model = self._get_client(resolved_model)
-        
-        if isinstance(client, dict) and client.get("type") == "cluster":
+
+        if client is None:
+            _log("❌ generate_image: 没有可用客户端")
+            return []
+
+        if self._is_nebula_client(client) and self._nebula_client is not None:
             _log(f"🎨 generate_image: nebula cluster, prompt={prompt[:50]}...")
             loop = asyncio.get_running_loop()
-            urls = await loop.run_in_executor(
-                None, self._generate_image_nebula_sync,
-                client["base_url"], prompt, n
+            return await loop.run_in_executor(
+                None,
+                self._nebula_client.generate_image,
+                prompt,
+                n,
             )
-            return urls
-        
+
         _log(f"⚠️ generate_image: {actual_model} 不支持生图")
         return []
 
-    # ============================================================
-    # JSON 接口
-    # ============================================================
-    async def chat_json(self, messages, model=None, role=None, **kwargs):
-        """
-        JSON 格式聊天接口
-        
-        Args:
-            messages: 消息列表
-            model: 直接指定模型名（优先级最高）
-            role: 通过角色选择模型
-        """
-        raw = "[空响应]"
-        try:
-            for attempt in range(3):
-                raw = await self.chat(messages, model=model, role=role, **kwargs)
-                if not raw or raw.startswith("["):
-                    if attempt == 2:
-                        return {"error": raw}
-                    continue
-                    
-                cleaned = raw.strip()
-                if "```json" in cleaned:
-                    cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-                elif "```" in cleaned:
-                    parts = cleaned.split("```")
-                    if len(parts) > 1:
-                        cleaned = parts[1].split("```")[0].strip()
-                        
-                try:
-                    return json.loads(cleaned)
-                except json.JSONDecodeError as e:
-                    _log(f"JSON 解析失败 {attempt+1}: {e}")
-                    if attempt == 2:
-                        return {"content": cleaned, "parse_error": str(e)}
-                    messages.append({
-                        "role": "system",
-                        "content": "请只返回有效的 JSON 格式，不要包含任何其他文本。"
-                    })
-                    
-            return {"content": raw}
-        except Exception as e:
-            _log(f"chat_json 异常: {e}")
-            return {"error": str(e), "content": str(raw)}
+    # ======================================================================
+    # JSON output
+    # ======================================================================
 
-    # ============================================================
-    # 健康检查
-    # ============================================================
-    async def health_check(self) -> bool:
-        """健康检查"""
-        for name, client in self._clients.items():
-            try:
-                if isinstance(client, dict) and client.get("type") == "cluster":
-                    continue
-                await asyncio.wait_for(client.models.list(), timeout=5)
-                return True
-            except:
+    async def chat_json(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        role: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """JSON-formatted chat interface with automatic retry.
+
+        Args:
+            messages: List of message dicts
+            model: Direct model ID
+            role: Role-based model selection
+            **kwargs: Additional parameters
+
+        Returns:
+            Parsed JSON dict (or dict with error/parse_error keys)
+        """
+        max_json_attempts = 3
+        local_messages = list(messages)  # Don't mutate original
+
+        for attempt in range(max_json_attempts):
+            raw = await self.chat(
+                local_messages,
+                model=model,
+                role=role,
+                **kwargs,
+            )
+
+            # Check for error responses
+            if raw.startswith("[") and raw.endswith("]"):
+                if attempt == max_json_attempts - 1:
+                    return {"error": raw}
                 continue
+
+            # Try to extract and parse JSON
+            cleaned = self._extract_json(raw)
+
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError as exc:
+                _log(f"JSON 解析失败 {attempt + 1}: {exc}")
+                if attempt == max_json_attempts - 1:
+                    return {"content": cleaned, "parse_error": str(exc)}
+
+                # Add hint for retry
+                local_messages.append({
+                    "role": "system",
+                    "content": "请只返回有效的 JSON 格式，不要包含任何其他文本。",
+                })
+
+        return {"content": raw, "error": "max_json_attempts_exceeded"}
+
+    @staticmethod
+    def _extract_json(raw: str) -> str:
+        """Extract JSON from markdown code blocks or raw text.
+
+        Args:
+            raw: Raw response text
+
+        Returns:
+            Cleaned JSON string
+        """
+        cleaned = raw.strip()
+
+        # Remove ```json blocks
+        if "```json" in cleaned:
+            parts = cleaned.split("```json", 1)
+            if len(parts) > 1:
+                cleaned = parts[1].split("```", 1)[0].strip()
+        elif "```" in cleaned:
+            parts = cleaned.split("```")
+            if len(parts) > 1:
+                cleaned = parts[1].split("```", 1)[0].strip()
+
+        return cleaned
+
+    # ======================================================================
+    # Health check
+    # ======================================================================
+
+    async def health_check(self) -> bool:
+        """Check if any provider is reachable.
+
+        Returns:
+            True if at least one provider is healthy
+        """
+        for name, client in self._clients.items():
+            if isinstance(client, dict) and client.get("type") == "cluster":
+                continue
+
+            try:
+                await asyncio.wait_for(
+                    client.models.list(),
+                    timeout=5.0,
+                )
+                _log(f"✅ health check: {name} OK")
+                return True
+            except Exception as exc:
+                _log(f"⚠️ health check: {name} failed: {exc}")
+                continue
+
         return False

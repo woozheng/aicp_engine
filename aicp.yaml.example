@@ -16,9 +16,7 @@ tokens:
 
 studio_token: "testtoken"  # 网页使用 Studio开发鉴权专用 
 
-remote_aicp:         ###### 本地 aicp_Cli 用于访问aicp_engine云端 aicp_Cli ，token为远端节点 token,此功能用于本地cli网络限制无法构建搜索，增加次配置和自动与云端网络无限制节点CLI沟通，由云顿cli节点自动执行任务返回数据 
-  endpoint: http://127.0.0.1:9000/api/builtins/aicpEnvelop
-  token: testtoken
+
   
 models:
   roles:

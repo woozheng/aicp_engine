@@ -15,9 +15,7 @@ tokens:
 
 studio_token: "testtoken"  # Studio web-based development authentication token
 
-remote_aicp:         ###### Local aicp_cli accesses cloud aicp_engine via this endpoint. Used when local CLI has network restrictions. Cloud CLI node auto-executes tasks and returns results.
-  endpoint: http://127.0.0.1:9000/api/builtins/aicpEnvelop
-  token: testtoken
+
   
 models:
   roles:
